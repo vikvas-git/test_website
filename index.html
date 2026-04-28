@@ -312,17 +312,17 @@
             } else {
                 document.getElementById('userInfo').innerHTML =
                     '<span>⏳ Зареждане на потребителска информация от SharePoint...</span>';
-                // Wait up to 5 seconds for postMessage context, then load anyway
+                // Wait up to 15 seconds for postMessage context, then load anyway
                 let waited = 0;
                 const waitInterval = setInterval(function() {
                     waited += 500;
                     if (userContext) {
                         clearInterval(waitInterval);
-                        log('✅ Context received, loading wxO with context');
+                        log('✅ Context received after ' + waited + 'ms, loading wxO with context');
                         loadWxOScript(userContext);
-                    } else if (waited >= 5000) {
+                    } else if (waited >= 15000) {
                         clearInterval(waitInterval);
-                        log('⚠️ No context after 5s, loading wxO without context');
+                        log('⚠️ No context after 15s, loading wxO without context');
                         loadWxOScript(null);
                     }
                 }, 500);
