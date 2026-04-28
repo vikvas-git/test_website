@@ -239,6 +239,10 @@
                     };
                     updateUserInfoDisplay(userContext);
                     log('Context updated from postMessage', userContext);
+                    // If wxO not yet loaded, load it now with context
+                    if (!wxoInitialized) {
+                        loadWxOScript(userContext);
+                    }
                 }
             });
             log('postMessage listener registered');
@@ -258,25 +262,10 @@
         // WATSONX ORCHESTRATE EMBED INITIALIZATION
         // ============================================
         
-        function initializeWxOChat() {
-            log('Initializing watsonx Orchestrate chat...');
+        let wxoInitialized = false;
 
-            // Setup postMessage listener FIRST (before extracting context)
-            setupPostMessageListener();
-
-            // Extract user context (may return null if waiting for postMessage)
-            userContext = extractUserContext();
-            if (userContext) {
-                updateUserInfoDisplay(userContext);
-            } else {
-                document.getElementById('userInfo').innerHTML =
-                    '<span>⏳ Зареждане на потребителска информация от SharePoint...</span>';
-            }
-            
-            log('User context ready for injection', userContext);
-            
-            // watsonx Orchestrate embed configuration (IBM Cloud format)
-            window.wxOConfiguration = {
+        function buildWxOConfig(context) {
+            return {
                 orchestrationID: "bf1e7315f7df43dfb37efcb6aedefbd4_1e3b139c-c4ce-4b25-bc15-913d150d5c81",
                 hostURL: "https://eu-de.watson-orchestrate.cloud.ibm.com",
                 rootElementID: "wxo-chat-container",
@@ -284,100 +273,86 @@
                 crn: "crn:v1:bluemix:public:watsonx-orchestrate:eu-de:a/bf1e7315f7df43dfb37efcb6aedefbd4:1e3b139c-c4ce-4b25-bc15-913d150d5c81::",
                 chatOptions: {
                     agentId: "b57638c8-6239-430b-bce1-4b0e6a4be865",
-                }
+                },
+                // Inject user context into session start
+                context: context ? {
+                    skills: {
+                        'main skill': {
+                            user_defined: {
+                                user_email: context.user_email,
+                                user_name: context.user_name,
+                                user_job_title: context.user_job_title,
+                                user_department: context.user_department
+                            }
+                        }
+                    }
+                } : undefined,
+                // Also pass as userID and custom session context
+                userID: context ? context.user_email : undefined,
+                sessionContext: context ? {
+                    user_email: context.user_email,
+                    user_name: context.user_name,
+                    user_job_title: context.user_job_title,
+                    user_department: context.user_department
+                } : undefined
             };
-            
-            // Load wxO embed script
-            setTimeout(function () {
-                log('Loading watsonx Orchestrate embed script...');
-                
-                const script = document.createElement('script');
-                script.src = `${window.wxOConfiguration.hostURL}/wxochat/wxoLoader.js?embed=true`;
-                
-                script.addEventListener('load', function () {
-                    log('wxO script loaded, initializing...');
-                    
-                    // Initialize wxO
-                    wxoLoader.init();
-                    
-                    log('wxO initialized, setting up context injection...');
-                    
-                    // Wait for wxO to be ready, then inject context
-                    setTimeout(function() {
-                        setupContextInjection();
-                    }, 2000);
-                });
-                
-                script.onerror = function() {
-                    log('❌ Failed to load wxO script');
-                    alert('Failed to load chat. Please check your configuration.');
-                };
-                
-                document.head.appendChild(script);
-            }, 0);
         }
-        
-        // Setup context injection for IBM Cloud wxO
-        let contextInjectionAttempts = 0;
-        function setupContextInjection() {
-            contextInjectionAttempts++;
-            log('Setting up context injection (attempt ' + contextInjectionAttempts + ')...');
-            
-            if (typeof wxoLoader === 'undefined') {
-                log('⚠️ wxoLoader not defined yet, retrying...');
-                if (contextInjectionAttempts < 30) setTimeout(setupContextInjection, 1000);
-                return;
-            }
 
-            // Try method 1: wxoLoader.instance.on()
-            if (wxoLoader.instance && typeof wxoLoader.instance.on === 'function') {
-                log('✅ Method 1: wxoLoader.instance.on()');
-                wxoLoader.instance.on({ type: 'pre:send', handler: preSendHandler });
-                log('Context injection setup complete via instance.on');
-                return;
-            }
+        function initializeWxOChat() {
+            log('Initializing watsonx Orchestrate chat...');
 
-            // Try method 2: wxoLoader.on() directly
-            if (typeof wxoLoader.on === 'function') {
-                log('✅ Method 2: wxoLoader.on()');
-                wxoLoader.on({ type: 'pre:send', handler: preSendHandler });
-                log('Context injection setup complete via wxoLoader.on');
-                return;
-            }
+            // Setup postMessage listener FIRST
+            setupPostMessageListener();
 
-            // Try method 3: wxoLoader.getInstance()
-            const instance = typeof wxoLoader.getInstance === 'function' ? wxoLoader.getInstance() : null;
-            if (instance && typeof instance.on === 'function') {
-                log('✅ Method 3: wxoLoader.getInstance().on()');
-                instance.on({ type: 'pre:send', handler: preSendHandler });
-                log('Context injection setup complete via getInstance');
-                return;
-            }
-
-            // Log what wxoLoader actually looks like for debugging
-            log('⚠️ No known method found. wxoLoader keys: ' + Object.keys(wxoLoader).join(', '));
-            if (contextInjectionAttempts < 30) {
-                setTimeout(setupContextInjection, 1000);
+            // Extract user context
+            userContext = extractUserContext();
+            if (userContext) {
+                updateUserInfoDisplay(userContext);
+                loadWxOScript(userContext);
             } else {
-                log('❌ Gave up after 30 attempts. Context injection failed.');
+                document.getElementById('userInfo').innerHTML =
+                    '<span>⏳ Зареждане на потребителска информация от SharePoint...</span>';
+                // Wait up to 5 seconds for postMessage context, then load anyway
+                let waited = 0;
+                const waitInterval = setInterval(function() {
+                    waited += 500;
+                    if (userContext) {
+                        clearInterval(waitInterval);
+                        log('✅ Context received, loading wxO with context');
+                        loadWxOScript(userContext);
+                    } else if (waited >= 5000) {
+                        clearInterval(waitInterval);
+                        log('⚠️ No context after 5s, loading wxO without context');
+                        loadWxOScript(null);
+                    }
+                }, 500);
             }
         }
-        
-        // Pre-send handler to inject context into every message
-        function preSendHandler(event) {
-            log('Injecting context into message', userContext);
-            
-            // Inject context into the message
-            event.data.context = event.data.context || {};
-            event.data.context.skills = event.data.context.skills || {};
-            event.data.context.skills['main skill'] = event.data.context.skills['main skill'] || {};
-            event.data.context.skills['main skill'].user_defined =
-                event.data.context.skills['main skill'].user_defined || {};
-            
-            // Inject our user context
-            Object.assign(event.data.context.skills['main skill'].user_defined, userContext);
-            
-            log('Context injected successfully');
+
+        function loadWxOScript(context) {
+            if (wxoInitialized) return;
+            wxoInitialized = true;
+
+            log('Loading wxO with context', context);
+
+            // Set config WITH context before init
+            window.wxOConfiguration = buildWxOConfig(context);
+            log('wxOConfiguration set', window.wxOConfiguration);
+
+            const script = document.createElement('script');
+            script.src = `${window.wxOConfiguration.hostURL}/wxochat/wxoLoader.js?embed=true`;
+
+            script.addEventListener('load', function () {
+                log('wxO script loaded, calling init()...');
+                wxoLoader.init();
+                log('✅ wxO initialized with user context embedded in config');
+            });
+
+            script.onerror = function() {
+                log('❌ Failed to load wxO script');
+            };
+
+            document.head.appendChild(script);
         }
         
         // ============================================
