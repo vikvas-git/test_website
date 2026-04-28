@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ДП РВД Асистент - BULATSA HR Assistant</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background-color: #0078d4;
+            color: white;
+            padding: 15px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .user-info {
+            background-color: #fff;
+            padding: 10px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .user-info strong {
+            color: #0078d4;
+        }
+        
+        .chat-container {
+            width: 100%;
+            height: calc(100vh - 120px);
+            border: none;
+        }
+        
+        .debug-panel {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #0f0;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-width: 400px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        
+        .debug-panel.show {
+            display: block;
+        }
+        
+        .debug-toggle {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 ДП РВД Асистент - BULATSA HR Assistant</h1>
+    </div>
+    
+    <div class="user-info" id="userInfo">
+        <span>Зареждане на потребителска информация...</span>
+    </div>
+    
+    <!-- watsonx Orchestrate Embed Container -->
+    <div id="wxo-chat-container" class="chat-container"></div>
+    
+    <!-- Debug Panel -->
+    <button class="debug-toggle" onclick="toggleDebug()">🐛 Debug</button>
+    <div id="debugPanel" class="debug-panel"></div>
+    
+    <script>
+        // ============================================
+        // USER CONTEXT EXTRACTION & INJECTION
+        // ============================================
+        
+        let userContext = null;
+        let debugLogs = [];
+        
+        function log(message, data = null) {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const logEntry = `[${timestamp}] ${message}`;
+            console.log(logEntry, data || '');
+            debugLogs.push(logEntry + (data ? ': ' + JSON.stringify(data, null, 2) : ''));
+            updateDebugPanel();
+        }
+        
+        function updateDebugPanel() {
+            const panel = document.getElementById('debugPanel');
+            panel.innerHTML = debugLogs.slice(-10).join('<br>');
+        }
+        
+        function toggleDebug() {
+            const panel = document.getElementById('debugPanel');
+            panel.classList.toggle('show');
+        }
+        
+        // Job Title Mapping - Using your actual Microsoft 365 users
+        const jobTitleMap = {
+            // PRESIDENT (Full Access)
+            'PattiF@62tyb4.onmicrosoft.com': 'President',           // Patti Fernandez - President
+            'admin@62tyb4.onmicrosoft.com': 'President',            // Viktor Vasilev - Admin (Full Access)
+            
+            // HR MANAGER (All Employees Access)
+            'DiegoS@62tyb4.onmicrosoft.com': 'HR Manager',          // Diego Siciliani - HR Manager
+            
+            // DIRECTORS/MANAGERS (Department Access)
+            'LeeG@62tyb4.onmicrosoft.com': 'Director',              // Lee Gu - Director
+            'MiriamG@62tyb4.onmicrosoft.com': 'Director',           // Miriam Graham - Director
+            'NestorW@62tyb4.onmicrosoft.com': 'Director',           // Nestor Wilke - Director
+            'MeganB@62tyb4.onmicrosoft.com': 'Marketing Manager',   // Megan Bowen - Marketing Manager
+            'LidiaH@62tyb4.onmicrosoft.com': 'Product Manager',     // Lidia Holloway - Product Manager
+            'AdeleV@62tyb4.onmicrosoft.com': 'Retail Manager',      // Adele Vance - Retail Manager
+            
+            // STAFF (Personal Access Only)
+            'AlexW@62tyb4.onmicrosoft.com': 'Marketing Assistant',  // Alex Wilber
+            'GradyA@62tyb4.onmicrosoft.com': 'Designer',            // Grady Archie
+            'HenriettaM@62tyb4.onmicrosoft.com': 'Developer',       // Henrietta Mueller
+            'IsaiahL@62tyb4.onmicrosoft.com': 'Sales Rep',          // Isaiah Langer
+            'JohannaL@62tyb4.onmicrosoft.com': 'Senior Engineer',   // Johanna Lorenz
+            'JoniS@62tyb4.onmicrosoft.com': 'Paralegal',            // Joni Sherman
+            'LynneR@62tyb4.onmicrosoft.com': 'Planner',             // Lynne Robbins
+            'PradeepG@62tyb4.onmicrosoft.com': 'Accountant',        // Pradeep Gupta
+        };
+        
+        const departmentMap = {
+            // PRESIDENT
+            'PattiF@62tyb4.onmicrosoft.com': 'Управление',
+            
+            // HR
+            'DiegoS@62tyb4.onmicrosoft.com': 'Човешки ресурси',
+            
+            // DIRECTORS/MANAGERS
+            'LeeG@62tyb4.onmicrosoft.com': 'Управление',
+            'MiriamG@62tyb4.onmicrosoft.com': 'Управление',
+            'NestorW@62tyb4.onmicrosoft.com': 'Управление',
+            'MeganB@62tyb4.onmicrosoft.com': 'Маркетинг',
+            'LidiaH@62tyb4.onmicrosoft.com': 'Продукти',
+            'AdeleV@62tyb4.onmicrosoft.com': 'Търговия',
+            
+            // STAFF
+            'admin@62tyb4.onmicrosoft.com': 'Дирекция ИС',
+            'AlexW@62tyb4.onmicrosoft.com': 'Маркетинг',
+            'GradyA@62tyb4.onmicrosoft.com': 'Дизайн',
+            'HenriettaM@62tyb4.onmicrosoft.com': 'Дирекция ИС',
+            'IsaiahL@62tyb4.onmicrosoft.com': 'Продажби',
+            'JohannaL@62tyb4.onmicrosoft.com': 'Дирекция ИС',
+            'JoniS@62tyb4.onmicrosoft.com': 'Правен отдел',
+            'LynneR@62tyb4.onmicrosoft.com': 'Планиране',
+            'PradeepG@62tyb4.onmicrosoft.com': 'Финанси',
+        };
+        
+        function extractUserContext() {
+            log('Extracting user context from SharePoint...');
+            
+            // Check if running in SharePoint
+            if (typeof _spPageContextInfo === 'undefined') {
+                log('⚠️ Not in SharePoint - using fallback test user');
+                return {
+                    user_email: 'admin@62tyb4.onmicrosoft.com',
+                    user_name: 'Test Admin',
+                    user_job_title: 'President',
+                    user_department: 'Управление'
+                };
+            }
+            
+            // Extract from SharePoint context
+            const userEmail = _spPageContextInfo.userEmail || _spPageContextInfo.userLoginName;
+            const userName = _spPageContextInfo.userDisplayName;
+            
+            log('SharePoint user detected', { userEmail, userName });
+            
+            // Map to job title and department (PoC approach)
+            const jobTitle = jobTitleMap[userEmail] || 'Staff'; // Default to Staff (personal access)
+            const department = departmentMap[userEmail] || 'Неизвестен';
+            
+            log('Mapped user context', { jobTitle, department });
+            
+            return {
+                user_email: userEmail,
+                user_name: userName,
+                user_job_title: jobTitle,
+                user_department: department
+            };
+        }
+        
+        function updateUserInfoDisplay(context) {
+            const userInfoDiv = document.getElementById('userInfo');
+            userInfoDiv.innerHTML = `
+                <strong>Потребител:</strong> ${context.user_name} 
+                (<strong>Email:</strong> ${context.user_email}) | 
+                <strong>Длъжност:</strong> ${context.user_job_title} | 
+                <strong>Отдел:</strong> ${context.user_department}
+            `;
+        }
+        
+        // ============================================
+        // WATSONX ORCHESTRATE EMBED INITIALIZATION
+        // ============================================
+        
+        function initializeWxOChat() {
+            log('Initializing watsonx Orchestrate chat...');
+            
+            // Extract user context
+            userContext = extractUserContext();
+            updateUserInfoDisplay(userContext);
+            
+            log('User context ready for injection', userContext);
+            
+            // watsonx Orchestrate embed configuration (IBM Cloud format)
+            window.wxOConfiguration = {
+                orchestrationID: "bf1e7315f7df43dfb37efcb6aedefbd4_1e3b139c-c4ce-4b25-bc15-913d150d5c81",
+                hostURL: "https://eu-de.watson-orchestrate.cloud.ibm.com",
+                rootElementID: "wxo-chat-container",
+                deploymentPlatform: "ibmcloud",
+                crn: "crn:v1:bluemix:public:watsonx-orchestrate:eu-de:a/bf1e7315f7df43dfb37efcb6aedefbd4:1e3b139c-c4ce-4b25-bc15-913d150d5c81::",
+                chatOptions: {
+                    agentId: "b57638c8-6239-430b-bce1-4b0e6a4be865",
+                }
+            };
+            
+            // Load wxO embed script
+            setTimeout(function () {
+                log('Loading watsonx Orchestrate embed script...');
+                
+                const script = document.createElement('script');
+                script.src = `${window.wxOConfiguration.hostURL}/wxochat/wxoLoader.js?embed=true`;
+                
+                script.addEventListener('load', function () {
+                    log('wxO script loaded, initializing...');
+                    
+                    // Initialize wxO
+                    wxoLoader.init();
+                    
+                    log('wxO initialized, setting up context injection...');
+                    
+                    // Wait for wxO to be ready, then inject context
+                    setTimeout(function() {
+                        setupContextInjection();
+                    }, 2000);
+                });
+                
+                script.onerror = function() {
+                    log('❌ Failed to load wxO script');
+                    alert('Failed to load chat. Please check your configuration.');
+                };
+                
+                document.head.appendChild(script);
+            }, 0);
+        }
+        
+        // Setup context injection for IBM Cloud wxO
+        function setupContextInjection() {
+            log('Setting up context injection for IBM Cloud wxO...');
+            
+            // Try to access the wxO instance
+            if (typeof wxoLoader !== 'undefined' && wxoLoader.instance) {
+                log('wxO instance found, registering pre:send handler');
+                
+                // Register pre:send event handler
+                wxoLoader.instance.on({
+                    type: 'pre:send',
+                    handler: preSendHandler
+                });
+                
+                log('Context injection setup complete');
+            } else {
+                log('⚠️ wxO instance not ready yet, retrying...');
+                setTimeout(setupContextInjection, 1000);
+            }
+        }
+        
+        // Pre-send handler to inject context into every message
+        function preSendHandler(event) {
+            log('Injecting context into message', userContext);
+            
+            // Inject context into the message
+            event.data.context = event.data.context || {};
+            event.data.context.skills = event.data.context.skills || {};
+            event.data.context.skills['main skill'] = event.data.context.skills['main skill'] || {};
+            event.data.context.skills['main skill'].user_defined =
+                event.data.context.skills['main skill'].user_defined || {};
+            
+            // Inject our user context
+            Object.assign(event.data.context.skills['main skill'].user_defined, userContext);
+            
+            log('Context injected successfully');
+        }
+        
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeWxOChat);
+        } else {
+            initializeWxOChat();
+        }
+        
+        log('SharePoint embed page loaded');
+    </script>
+</body>
+</html>
