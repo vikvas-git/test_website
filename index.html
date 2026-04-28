@@ -318,23 +318,48 @@
         }
         
         // Setup context injection for IBM Cloud wxO
+        let contextInjectionAttempts = 0;
         function setupContextInjection() {
-            log('Setting up context injection for IBM Cloud wxO...');
+            contextInjectionAttempts++;
+            log('Setting up context injection (attempt ' + contextInjectionAttempts + ')...');
             
-            // Try to access the wxO instance
-            if (typeof wxoLoader !== 'undefined' && wxoLoader.instance) {
-                log('wxO instance found, registering pre:send handler');
-                
-                // Register pre:send event handler
-                wxoLoader.instance.on({
-                    type: 'pre:send',
-                    handler: preSendHandler
-                });
-                
-                log('Context injection setup complete');
-            } else {
-                log('⚠️ wxO instance not ready yet, retrying...');
+            if (typeof wxoLoader === 'undefined') {
+                log('⚠️ wxoLoader not defined yet, retrying...');
+                if (contextInjectionAttempts < 30) setTimeout(setupContextInjection, 1000);
+                return;
+            }
+
+            // Try method 1: wxoLoader.instance.on()
+            if (wxoLoader.instance && typeof wxoLoader.instance.on === 'function') {
+                log('✅ Method 1: wxoLoader.instance.on()');
+                wxoLoader.instance.on({ type: 'pre:send', handler: preSendHandler });
+                log('Context injection setup complete via instance.on');
+                return;
+            }
+
+            // Try method 2: wxoLoader.on() directly
+            if (typeof wxoLoader.on === 'function') {
+                log('✅ Method 2: wxoLoader.on()');
+                wxoLoader.on({ type: 'pre:send', handler: preSendHandler });
+                log('Context injection setup complete via wxoLoader.on');
+                return;
+            }
+
+            // Try method 3: wxoLoader.getInstance()
+            const instance = typeof wxoLoader.getInstance === 'function' ? wxoLoader.getInstance() : null;
+            if (instance && typeof instance.on === 'function') {
+                log('✅ Method 3: wxoLoader.getInstance().on()');
+                instance.on({ type: 'pre:send', handler: preSendHandler });
+                log('Context injection setup complete via getInstance');
+                return;
+            }
+
+            // Log what wxoLoader actually looks like for debugging
+            log('⚠️ No known method found. wxoLoader keys: ' + Object.keys(wxoLoader).join(', '));
+            if (contextInjectionAttempts < 30) {
                 setTimeout(setupContextInjection, 1000);
+            } else {
+                log('❌ Gave up after 30 attempts. Context injection failed.');
             }
         }
         
