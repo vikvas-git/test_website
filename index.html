@@ -82,7 +82,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR CONTEXT</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR CHOCO</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -181,44 +181,34 @@
         const departmentMap = {
             // PRESIDENT — sees everything
             'PattiF@62tyb4.onmicrosoft.com': 'Управление',
-            'admin@62tyb4.onmicrosoft.com': 'Управление',
+            'admin@62tyb4.onmicrosoft.com':  'Управление',
 
             // HR MANAGER — sees all employees
             'DiegoS@62tyb4.onmicrosoft.com': 'Човешки ресурси',
 
             // DIRECTORS — mapped to real GFP departments for demo
-            'LeeG@62tyb4.onmicrosoft.com': 'Управление на собствеността',   // sees: зелени площи, обзавеждане, автомобили
-            'NestorW@62tyb4.onmicrosoft.com': 'Дирекция ИС',                // sees: принтери, сървъри, ИТ поддръжка
-            'MiriamG@62tyb4.onmicrosoft.com': 'Финанси',                    // sees: счетоводен софтуер
+            'LeeG@62tyb4.onmicrosoft.com':   'Управление на собствеността',  // projects: зелени площи, обзавеждане, автомобили
+            'NestorW@62tyb4.onmicrosoft.com':'Дирекция ИС',                  // projects: принтери, сървъри, ИТ поддръжка
+            'MiriamG@62tyb4.onmicrosoft.com':'Финанси',                      // projects: счетоводен софтуер
             'MeganB@62tyb4.onmicrosoft.com': 'Управление на собствеността',
             'LidiaH@62tyb4.onmicrosoft.com': 'Дирекция ИС',
             'AdeleV@62tyb4.onmicrosoft.com': 'Финанси',
 
             // STAFF — mapped to real departments, DENIED financial/network
-            // Vacation name mapping (vacation schedule has 3 real names in Дирекция ИС):
-            // HenriettaM → "Димитър Владимиров Томов" (Специалист - системен администратор)
-            // JohannaL   → "Людмил Емилов Аризанов"  (Експерт)
-            // GradyA     → "Павлин Генчев Дулев"      (Експерт)
+            // Vacation name mapping to real names in vacation schedule:
+            // HenriettaM → "Димитър Владимиров Томов"  (Специалист - системен администратор)
+            // JohannaL   → "Людмил Емилов Аризанов"    (Експерт)
+            // GradyA     → "Павлин Генчев Дулев"        (Експерт)
             'HenriettaM@62tyb4.onmicrosoft.com': 'Дирекция ИС',
-            'JohannaL@62tyb4.onmicrosoft.com': 'Дирекция ИС',
-            'GradyA@62tyb4.onmicrosoft.com': 'Дирекция ИС',
-            'PradeepG@62tyb4.onmicrosoft.com': 'Финанси',
-            'AlexW@62tyb4.onmicrosoft.com': 'Управление на собствеността',
-            'IsaiahL@62tyb4.onmicrosoft.com': 'Управление на собствеността',
-            'JoniS@62tyb4.onmicrosoft.com': 'Управление на собствеността',
-            'LynneR@62tyb4.onmicrosoft.com': 'Финанси',
+            'JohannaL@62tyb4.onmicrosoft.com':   'Дирекция ИС',
+            'GradyA@62tyb4.onmicrosoft.com':     'Дирекция ИС',
+            'PradeepG@62tyb4.onmicrosoft.com':   'Финанси',
+            'AlexW@62tyb4.onmicrosoft.com':      'Управление на собствеността',
+            'IsaiahL@62tyb4.onmicrosoft.com':    'Управление на собствеността',
+            'JoniS@62tyb4.onmicrosoft.com':      'Управление на собствеността',
+            'LynneR@62tyb4.onmicrosoft.com':     'Финанси',
         };
         
-        const vacationAliasMap = {
-            // Demo aliases from M365 users to actual employee names in the vacation spreadsheet
-            'HenriettaM@62tyb4.onmicrosoft.com': 'Димитър Владимиров Томов',
-            'JohannaL@62tyb4.onmicrosoft.com': 'Людмил Емилов Аризанов',
-            'GradyA@62tyb4.onmicrosoft.com': 'Павлин Генчев Дулев',
-            // Optional manager/demo mappings
-            'NestorW@62tyb4.onmicrosoft.com': 'Димитър Владимиров Томов',
-            'LeeG@62tyb4.onmicrosoft.com': 'Людмил Емилов Аризанов'
-        };
-
         async function extractUserContext() {
             log('Extracting user context via MSAL silent SSO...');
 
@@ -297,27 +287,24 @@
         }
 
         function buildContext(email, name) {
-            const jobTitle = jobTitleMap[email] || 'Staff';
+            const jobTitle   = jobTitleMap[email]   || 'Staff';
             const department = departmentMap[email] || 'Неизвестен';
-            const vacation_employee_name = vacationAliasMap[email] || '';
-            log('Mapped user context', { email, jobTitle, department, vacation_employee_name });
+            log('Mapped user context', { email, jobTitle, department });
             return {
-                user_email: email,
-                user_name: name,
-                user_job_title: jobTitle,
-                user_department: department,
-                vacation_employee_name: vacation_employee_name
+                user_email:      email,
+                user_name:       name,
+                user_job_title:  jobTitle,
+                user_department: department
             };
         }
         
         function updateUserInfoDisplay(context) {
             const userInfoDiv = document.getElementById('userInfo');
             userInfoDiv.innerHTML = `
-                <strong>Потребител:</strong> ${context.user_name}
-                (<strong>Email:</strong> ${context.user_email}) |
-                <strong>Длъжност:</strong> ${context.user_job_title} |
+                <strong>Потребител:</strong> ${context.user_name} 
+                (<strong>Email:</strong> ${context.user_email}) | 
+                <strong>Длъжност:</strong> ${context.user_job_title} | 
                 <strong>Отдел:</strong> ${context.user_department}
-                ${context.vacation_employee_name ? ` | <strong>Отпуски като:</strong> ${context.vacation_employee_name}` : ''}
             `;
         }
         
@@ -334,7 +321,7 @@
             
             log('User context ready for injection', userContext);
             
-            // watsonx Orchestrate embed configuration
+            // watsonx Orchestrate embed configuration with user context baked in
             window.wxOConfiguration = {
                 orchestrationID: "bf1e7315f7df43dfb37efcb6aedefbd4_1e3b139c-c4ce-4b25-bc15-913d150d5c81",
                 hostURL: "https://eu-de.watson-orchestrate.cloud.ibm.com",
@@ -343,10 +330,12 @@
                 crn: "crn:v1:bluemix:public:watsonx-orchestrate:eu-de:a/bf1e7315f7df43dfb37efcb6aedefbd4:1e3b139c-c4ce-4b25-bc15-913d150d5c81::",
                 chatOptions: {
                     agentId: "b57638c8-6239-430b-bce1-4b0e6a4be865",
-                }
+                },
+                // Flat context shape — correct wxO embedded chat syntax
+                context: userContext
             };
             
-            log('wxOConfiguration ready', userContext);
+            log('wxOConfiguration ready with user context', userContext);
             
             // Load wxO embed script
             const script = document.createElement('script');
@@ -354,27 +343,8 @@
             
             script.addEventListener('load', function () {
                 log('wxO script loaded, initializing...');
-                const instance = wxoLoader.init();
-
-                if (instance && typeof instance.on === 'function') {
-                    instance.on('chat:ready', function () {
-                        log('✅ wxO chat ready');
-                    });
-
-                    instance.on('pre:send', function (event) {
-                        event.message.context = {
-                            ...(event.message.context || {}),
-                            user_email: userContext.user_email,
-                            user_name: userContext.user_name,
-                            user_job_title: userContext.user_job_title,
-                            user_department: userContext.user_department,
-                            vacation_employee_name: userContext.vacation_employee_name
-                        };
-                        log('Injected context via pre:send', event.message.context);
-                    });
-                }
-
-                log('✅ wxO initialized with runtime context injection');
+                wxoLoader.init();
+                log('✅ wxO initialized with user context embedded');
             });
             
             script.onerror = function() {
