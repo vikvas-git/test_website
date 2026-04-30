@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ДП РВД Асистент - BULATSA HR ЧОВЕК</title>
-    <!-- v2.6 - 2026-04-30 - 5s wait for context, sender fires at 1s -->
+    <title>ДП РВД Асистент - BULATSA HR Assistant</title>
     <style>
         body {
             margin: 0;
@@ -81,7 +80,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR Човек</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR Човек2</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -178,104 +177,36 @@
         
         function extractUserContext() {
             log('Extracting user context from SharePoint...');
-
-            // Method 1: Check URL parameters (sent by SharePoint page script)
-            const urlParams = new URLSearchParams(window.location.search);
-            const paramEmail = urlParams.get('email');
-            const paramName = urlParams.get('name');
-            if (paramEmail) {
-                log('✅ User context from URL params', { paramEmail, paramName });
-                const emailKey = Object.keys(jobTitleMap).find(k => k.toLowerCase() === paramEmail.toLowerCase()) || paramEmail;
-                const jobTitle = jobTitleMap[emailKey] || 'Staff';
-                const department = departmentMap[emailKey] || 'Неизвестен';
+            
+            // Check if running in SharePoint
+            if (typeof _spPageContextInfo === 'undefined') {
+                log('⚠️ Not in SharePoint - using fallback test user');
                 return {
-                    user_email: emailKey,
-                    user_name: paramName || paramEmail,
-                    user_job_title: jobTitle,
-                    user_department: department
+                    user_email: 'admin@62tyb4.onmicrosoft.com',
+                    user_name: 'Test Admin',
+                    user_job_title: 'President',
+                    user_department: 'Управление'
                 };
             }
-
-            // Method 2: Check if _spPageContextInfo is available (direct SharePoint load, not iframe)
-            if (typeof _spPageContextInfo !== 'undefined') {
-                const userEmail = _spPageContextInfo.userEmail || _spPageContextInfo.userLoginName;
-                const userName = _spPageContextInfo.userDisplayName;
-                log('✅ SharePoint context available directly', { userEmail, userName });
-                const emailKey = Object.keys(jobTitleMap).find(k => k.toLowerCase() === userEmail.toLowerCase()) || userEmail;
-                const jobTitle = jobTitleMap[emailKey] || 'Staff';
-                const department = departmentMap[emailKey] || 'Неизвестен';
-                return {
-                    user_email: emailKey,
-                    user_name: userName,
-                    user_job_title: jobTitle,
-                    user_department: department
-                };
-            }
-
-            // Method 3: Try SharePoint REST API directly (works when hosted on SharePoint domain)
-            const isSharePointHosted = window.location.hostname.includes('sharepoint.com');
-            if (isSharePointHosted) {
-                log('🔄 Hosted on SharePoint - trying REST API directly...');
-                fetch('/_api/web/currentuser', {
-                    headers: { 'Accept': 'application/json;odata=verbose' },
-                    credentials: 'same-origin'
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    const user = data.d || {};
-                    const email = user.Email || user.LoginName || '';
-                    const name = user.Title || email;
-                    if (email) {
-                        log('✅ REST API user (SharePoint-hosted)', { email, name });
-                        const emailKey = Object.keys(jobTitleMap).find(k => k.toLowerCase() === email.toLowerCase()) || email;
-                        userContext = {
-                            user_email: emailKey,
-                            user_name: name,
-                            user_job_title: jobTitleMap[emailKey] || 'Staff',
-                            user_department: departmentMap[emailKey] || 'Неизвестен'
-                        };
-                        updateUserInfoDisplay(userContext);
-                        if (!wxoInitialized) loadWxOScript(userContext);
-                    }
-                })
-                .catch(function(e) { log('REST API failed: ' + e); });
-            }
-
-            // Method 4: Wait for postMessage from parent SharePoint page (set via setupPostMessageListener)
-            log('⏳ No context yet - waiting for postMessage from SharePoint parent...');
-            return null; // Will be set later via postMessage
-        }
-
-        function setupPostMessageListener() {
-            window.addEventListener('message', function(event) {
-                // Accept messages from SharePoint, Microsoft, or any trusted origin
-                // Note: we validate the message TYPE and content instead of relying solely on origin
-                const trustedOrigins = ['sharepoint.com', 'microsoft.com', 'microsoftonline.com'];
-                const isTrusted = trustedOrigins.some(o => event.origin.includes(o));
-                log('📨 Message received from: ' + event.origin + ' (trusted: ' + isTrusted + ')');
-                if (!isTrusted) {
-                    log('⚠️ Ignoring message from unknown origin: ' + event.origin);
-                    return;
-                }
-                const data = event.data;
-                if (data && data.type === 'SHAREPOINT_USER_CONTEXT' && data.user_email) {
-                    log('✅ Received user context via postMessage', data);
-                    const emailKey = Object.keys(jobTitleMap).find(k => k.toLowerCase() === data.user_email.toLowerCase()) || data.user_email;
-                    userContext = {
-                        user_email: emailKey,
-                        user_name: data.user_name || emailKey,
-                        user_job_title: jobTitleMap[emailKey] || 'Staff',
-                        user_department: departmentMap[emailKey] || 'Неизвестен'
-                    };
-                    updateUserInfoDisplay(userContext);
-                    log('Context updated from postMessage', userContext);
-                    // If wxO not yet loaded, load it now with context
-                    if (!wxoInitialized) {
-                        loadWxOScript(userContext);
-                    }
-                }
-            });
-            log('postMessage listener registered');
+            
+            // Extract from SharePoint context
+            const userEmail = _spPageContextInfo.userEmail || _spPageContextInfo.userLoginName;
+            const userName = _spPageContextInfo.userDisplayName;
+            
+            log('SharePoint user detected', { userEmail, userName });
+            
+            // Map to job title and department (PoC approach)
+            const jobTitle = jobTitleMap[userEmail] || 'Staff'; // Default to Staff (personal access)
+            const department = departmentMap[userEmail] || 'Неизвестен';
+            
+            log('Mapped user context', { jobTitle, department });
+            
+            return {
+                user_email: userEmail,
+                user_name: userName,
+                user_job_title: jobTitle,
+                user_department: department
+            };
         }
         
         function updateUserInfoDisplay(context) {
@@ -292,10 +223,17 @@
         // WATSONX ORCHESTRATE EMBED INITIALIZATION
         // ============================================
         
-        let wxoInitialized = false;
-
-        function buildWxOConfig(context) {
-            return {
+        function initializeWxOChat() {
+            log('Initializing watsonx Orchestrate chat...');
+            
+            // Extract user context
+            userContext = extractUserContext();
+            updateUserInfoDisplay(userContext);
+            
+            log('User context ready for injection', userContext);
+            
+            // watsonx Orchestrate embed configuration with user context baked in
+            window.wxOConfiguration = {
                 orchestrationID: "bf1e7315f7df43dfb37efcb6aedefbd4_1e3b139c-c4ce-4b25-bc15-913d150d5c81",
                 hostURL: "https://eu-de.watson-orchestrate.cloud.ibm.com",
                 rootElementID: "wxo-chat-container",
@@ -304,134 +242,33 @@
                 chatOptions: {
                     agentId: "b57638c8-6239-430b-bce1-4b0e6a4be865",
                 },
-                // Inject user context into session start
-                context: context ? {
+                // Inject user context directly — works for every SP user automatically
+                context: {
                     skills: {
                         'main skill': {
-                            user_defined: {
-                                user_email: context.user_email,
-                                user_name: context.user_name,
-                                user_job_title: context.user_job_title,
-                                user_department: context.user_department
-                            }
+                            user_defined: userContext
                         }
                     }
-                } : undefined,
-                // Also pass as userID and custom session context
-                userID: context ? context.user_email : undefined,
-                sessionContext: context ? {
-                    user_email: context.user_email,
-                    user_name: context.user_name,
-                    user_job_title: context.user_job_title,
-                    user_department: context.user_department
-                } : undefined
+                }
             };
-        }
-
-        function initializeWxOChat() {
-            log('Initializing watsonx Orchestrate chat...');
-
-            // Setup postMessage listener FIRST
-            setupPostMessageListener();
-
-            // Extract user context
-            userContext = extractUserContext();
-            if (userContext) {
-                updateUserInfoDisplay(userContext);
-                loadWxOScript(userContext);
-            } else {
-                document.getElementById('userInfo').innerHTML =
-                    '<span>⏳ Зареждане на потребителска информация от SharePoint...</span>';
-                // Wait up to 15 seconds for postMessage context, then load anyway
-                let waited = 0;
-                const waitInterval = setInterval(function() {
-                    waited += 500;
-                    if (userContext) {
-                        clearInterval(waitInterval);
-                        log('✅ Context received after ' + waited + 'ms, loading wxO with context');
-                        loadWxOScript(userContext);
-                    } else if (waited >= 5000) {
-                        clearInterval(waitInterval);
-                        log('⚠️ No context after 5s, loading wxO without context (access will be denied)');
-                        loadWxOScript(null);
-                    }
-                }, 500);
-            }
-        }
-
-        function loadWxOScript(context) {
-            if (wxoInitialized) return;
-            wxoInitialized = true;
-
-            log('Loading wxO with context', context);
-
-            window.wxOConfiguration = buildWxOConfig(context);
-            log('wxOConfiguration set', window.wxOConfiguration);
-
+            
+            log('wxOConfiguration ready with user context', userContext);
+            
+            // Load wxO embed script
             const script = document.createElement('script');
             script.src = `${window.wxOConfiguration.hostURL}/wxochat/wxoLoader.js?embed=true`;
-
+            
             script.addEventListener('load', function () {
-                log('wxO script loaded, calling init()...');
-
-                // Try to register pre:send BEFORE init() so it's ready immediately
-                const wxoTarget = wxoLoader;
-                if (wxoTarget && typeof wxoTarget.on === 'function') {
-                    wxoTarget.on('pre:send', function(event) {
-                        const ctx = userContext;
-                        if (!ctx) {
-                            log('⚠️ pre:send fired but no userContext yet');
-                            return;
-                        }
-                        event.message = event.message || {};
-                        event.message.context = event.message.context || {};
-                        event.message.context.skills = {
-                            'main skill': {
-                                user_defined: {
-                                    user_email: ctx.user_email,
-                                    user_name: ctx.user_name,
-                                    user_job_title: ctx.user_job_title,
-                                    user_department: ctx.user_department
-                                }
-                            }
-                        };
-                        log('📤 pre:send context injected for: ' + ctx.user_email);
-                    });
-                    log('✅ pre:send hook registered on wxoLoader directly');
-                } else {
-                    log('⚠️ wxoLoader.on() not available either - logging wxoLoader keys: ' + Object.keys(wxoLoader).join(', '));
-                }
-
-                const instance = wxoLoader.init();
-                log('✅ wxO initialized - instance type: ' + typeof instance + ' keys: ' + (instance ? Object.keys(instance).join(', ') : 'null'));
-
-                // Also try on instance if it has .on()
-                if (instance && typeof instance.on === 'function') {
-                    instance.on('pre:send', function(event) {
-                        const ctx = userContext;
-                        if (!ctx) return;
-                        event.message = event.message || {};
-                        event.message.context = event.message.context || {};
-                        event.message.context.skills = {
-                            'main skill': {
-                                user_defined: {
-                                    user_email: ctx.user_email,
-                                    user_name: ctx.user_name,
-                                    user_job_title: ctx.user_job_title,
-                                    user_department: ctx.user_department
-                                }
-                            }
-                        };
-                        log('📤 pre:send (instance) context injected for: ' + ctx.user_email);
-                    });
-                    log('✅ pre:send hook also registered on instance');
-                }
+                log('wxO script loaded, initializing...');
+                wxoLoader.init();
+                log('✅ wxO initialized with user context embedded');
             });
-
+            
             script.onerror = function() {
                 log('❌ Failed to load wxO script');
+                alert('Failed to load chat. Please check your configuration.');
             };
-
+            
             document.head.appendChild(script);
         }
         
