@@ -82,11 +82,25 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR XD</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA MAN</h1>
     </div>
     
     <div class="user-info" id="userInfo">
         <span>Зареждане на потребителска информация...</span>
+    </div>
+
+    <!-- Sign-in overlay (shown when silent SSO fails in iframe) -->
+    <div id="signInOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+         background:rgba(245,245,245,0.97); z-index:999; display:none;
+         flex-direction:column; align-items:center; justify-content:center; gap:16px;">
+        <div style="font-size:48px;">🔐</div>
+        <div style="font-size:18px; color:#333; font-family:'Segoe UI',sans-serif;">Влезте с вашия Microsoft 365 акаунт</div>
+        <div style="font-size:13px; color:#666; font-family:'Segoe UI',sans-serif;">Необходима е автентикация за достъп до асистента</div>
+        <button id="signInBtn" onclick="triggerSignIn()"
+            style="background:#0078d4; color:white; border:none; padding:12px 32px;
+                   border-radius:6px; font-size:16px; cursor:pointer; font-family:'Segoe UI',sans-serif;">
+            🔑 Вход с Microsoft 365
+        </button>
     </div>
     
     <!-- watsonx Orchestrate Embed Container -->
@@ -203,24 +217,18 @@
                 return buildContext(paramEmail, paramName || paramEmail);
             }
 
-            // ── Priority 2: MSAL silent SSO (reuses existing M365 browser session) ──
+            // ── Priority 2: MSAL silent SSO ──
             try {
-                if (typeof msal === 'undefined') {
-                    throw new Error('MSAL library not loaded');
-                }
+                if (typeof msal === 'undefined') throw new Error('MSAL library not loaded');
 
                 msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
                 await msalInstance.initialize();
-
-                // Handle redirect response if returning from login
                 await msalInstance.handleRedirectPromise();
 
                 const accounts = msalInstance.getAllAccounts();
                 log('MSAL accounts found', { count: accounts.length });
 
                 let tokenResponse;
-                // ALWAYS try ssoSilent first — this checks the LIVE browser session,
-                // not the cache. Prevents stale cached user showing after account switch.
                 try {
                     tokenResponse = await msalInstance.ssoSilent({ scopes: ["User.Read"] });
                     log('ssoSilent succeeded', { account: tokenResponse.account?.username });
@@ -232,45 +240,46 @@
                             account: accounts[0]
                         });
                     } else {
-                        throw ssoError; // no fallback available
+                        throw ssoError;
                     }
                 }
 
-                // Call Microsoft Graph /me to get real user info
-                const graphResponse = await fetch("https://graph.microsoft.com/v1.0/me", {
-                    headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
-                });
-                const me = await graphResponse.json();
-                log('✅ Graph /me response', { email: me.mail || me.userPrincipalName, name: me.displayName });
-
-                const email = me.mail || me.userPrincipalName;
-                return buildContext(email, me.displayName);
+                return await fetchGraphMe(tokenResponse.accessToken);
 
             } catch (msalError) {
-                log('⚠️ MSAL silent SSO failed — trying interactive login', { error: msalError.message });
+                log('⚠️ Silent SSO failed — showing sign-in button', { error: msalError.message });
 
-                // Only fall back to interactive if it's a login-required error
-                if (msalError.name === 'InteractionRequiredAuthError' ||
-                    msalError.errorCode === 'login_required' ||
-                    msalError.errorCode === 'consent_required') {
-                    try {
-                        const tokenResponse = await msalInstance.acquireTokenPopup({ scopes: ["User.Read"] });
-                        const graphResponse = await fetch("https://graph.microsoft.com/v1.0/me", {
-                            headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
-                        });
-                        const me = await graphResponse.json();
-                        const email = me.mail || me.userPrincipalName;
-                        log('✅ User context from interactive login', { email });
-                        return buildContext(email, me.displayName);
-                    } catch (popupError) {
-                        log('❌ Interactive login failed', { error: popupError.message });
-                    }
-                }
+                // Show sign-in button overlay — popups must be user-gesture triggered
+                return new Promise((resolve) => {
+                    const overlay = document.getElementById('signInOverlay');
+                    overlay.style.display = 'flex';
+                    window._signInResolve = resolve;
+                });
             }
+        }
 
-            // ── Fallback: local dev only ──
-            log('⚠️ All auth methods failed — using fallback test user');
-            return buildContext('admin@62tyb4.onmicrosoft.com', 'Test Admin');
+        async function triggerSignIn() {
+            try {
+                const tokenResponse = await msalInstance.acquireTokenPopup({ scopes: ["User.Read"] });
+                const context = await fetchGraphMe(tokenResponse.accessToken);
+                document.getElementById('signInOverlay').style.display = 'none';
+                if (window._signInResolve) {
+                    window._signInResolve(context);
+                    window._signInResolve = null;
+                }
+            } catch (err) {
+                log('❌ Sign-in failed', { error: err.message });
+                alert('Входът не беше успешен. Моля, опитайте отново.');
+            }
+        }
+
+        async function fetchGraphMe(accessToken) {
+            const graphResponse = await fetch("https://graph.microsoft.com/v1.0/me", {
+                headers: { Authorization: `Bearer ${accessToken}` }
+            });
+            const me = await graphResponse.json();
+            log('✅ Graph /me response', { email: me.mail || me.userPrincipalName, name: me.displayName });
+            return buildContext(me.mail || me.userPrincipalName, me.displayName);
         }
 
         function buildContext(email, name) {
