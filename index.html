@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ДП РВД Асистент - BULATSA HR Assistant</title>
+    <!-- MSAL.js for silent Microsoft 365 SSO -->
+    <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -80,7 +82,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR БОТ</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR DD</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -96,9 +98,23 @@
     
     <script>
         // ============================================
+        // MSAL CONFIG — update CLIENT_ID after Azure app registration
+        // ============================================
+        const MSAL_CONFIG = {
+            auth: {
+                clientId: "261b05d3-dce5-4db9-8ca3-41c91c05f260",   // ← only thing you need to change
+                authority: "https://login.microsoftonline.com/3604d49a-1aa7-4e3a-b14a-7ebd2c51115f",
+                redirectUri: "https://vikvas-git.github.io/test_website/index.html"
+            },
+            cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
+        };
+
+        const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
+
+        // ============================================
         // USER CONTEXT EXTRACTION & INJECTION
         // ============================================
-        
+
         let userContext = null;
         let debugLogs = [];
         
@@ -175,50 +191,89 @@
             'PradeepG@62tyb4.onmicrosoft.com': 'Финанси',
         };
         
-        function extractUserContext() {
-            log('Extracting user context...');
+        async function extractUserContext() {
+            log('Extracting user context via MSAL silent SSO...');
 
-            // ── Priority 1: URL query parameters (passed by SharePoint Script Editor) ──
+            // ── Priority 1: URL query parameters (manual override / testing) ──
             const params = new URLSearchParams(window.location.search);
             const paramEmail = params.get('email');
             const paramName  = params.get('name');
-
             if (paramEmail) {
                 log('✅ User context from URL params', { paramEmail, paramName });
-                const jobTitle   = jobTitleMap[paramEmail]   || 'Staff';
-                const department = departmentMap[paramEmail] || 'Неизвестен';
-                log('Mapped user context', { jobTitle, department });
-                return {
-                    user_email:      paramEmail,
-                    user_name:       paramName || paramEmail,
-                    user_job_title:  jobTitle,
-                    user_department: department
-                };
+                return buildContext(paramEmail, paramName || paramEmail);
             }
 
-            // ── Priority 2: _spPageContextInfo (only present if served from SharePoint) ──
-            if (typeof _spPageContextInfo !== 'undefined') {
-                const userEmail = _spPageContextInfo.userEmail || _spPageContextInfo.userLoginName;
-                const userName  = _spPageContextInfo.userDisplayName;
-                log('✅ User context from _spPageContextInfo', { userEmail, userName });
-                const jobTitle   = jobTitleMap[userEmail]   || 'Staff';
-                const department = departmentMap[userEmail] || 'Неизвестен';
-                log('Mapped user context', { jobTitle, department });
-                return {
-                    user_email:      userEmail,
-                    user_name:       userName,
-                    user_job_title:  jobTitle,
-                    user_department: department
-                };
+            // ── Priority 2: MSAL silent SSO (reuses existing M365 browser session) ──
+            try {
+                await msalInstance.initialize();
+
+                // Handle redirect response if returning from login
+                await msalInstance.handleRedirectPromise();
+
+                const accounts = msalInstance.getAllAccounts();
+                log('MSAL accounts found', { count: accounts.length });
+
+                let tokenResponse;
+                if (accounts.length > 0) {
+                    // Silent token acquisition — no popup, no redirect
+                    tokenResponse = await msalInstance.acquireTokenSilent({
+                        scopes: ["User.Read"],
+                        account: accounts[0]
+                    });
+                } else {
+                    // No cached session — try silent login via SSO hint
+                    tokenResponse = await msalInstance.ssoSilent({
+                        scopes: ["User.Read"],
+                        loginHint: ""
+                    });
+                }
+
+                // Call Microsoft Graph /me to get real user info
+                const graphResponse = await fetch("https://graph.microsoft.com/v1.0/me", {
+                    headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
+                });
+                const me = await graphResponse.json();
+                log('✅ Graph /me response', { email: me.mail || me.userPrincipalName, name: me.displayName });
+
+                const email = me.mail || me.userPrincipalName;
+                return buildContext(email, me.displayName);
+
+            } catch (msalError) {
+                log('⚠️ MSAL silent SSO failed — trying interactive login', { error: msalError.message });
+
+                // Only fall back to interactive if it's a login-required error
+                if (msalError.name === 'InteractionRequiredAuthError' ||
+                    msalError.errorCode === 'login_required' ||
+                    msalError.errorCode === 'consent_required') {
+                    try {
+                        const tokenResponse = await msalInstance.acquireTokenPopup({ scopes: ["User.Read"] });
+                        const graphResponse = await fetch("https://graph.microsoft.com/v1.0/me", {
+                            headers: { Authorization: `Bearer ${tokenResponse.accessToken}` }
+                        });
+                        const me = await graphResponse.json();
+                        const email = me.mail || me.userPrincipalName;
+                        log('✅ User context from interactive login', { email });
+                        return buildContext(email, me.displayName);
+                    } catch (popupError) {
+                        log('❌ Interactive login failed', { error: popupError.message });
+                    }
+                }
             }
 
-            // ── Fallback: hardcoded test user (local dev only) ──
-            log('⚠️ No SharePoint context or URL params — using fallback test user');
+            // ── Fallback: local dev only ──
+            log('⚠️ All auth methods failed — using fallback test user');
+            return buildContext('admin@62tyb4.onmicrosoft.com', 'Test Admin');
+        }
+
+        function buildContext(email, name) {
+            const jobTitle   = jobTitleMap[email]   || 'Staff';
+            const department = departmentMap[email] || 'Неизвестен';
+            log('Mapped user context', { email, jobTitle, department });
             return {
-                user_email:      'admin@62tyb4.onmicrosoft.com',
-                user_name:       'Test Admin',
-                user_job_title:  'President',
-                user_department: 'Управление'
+                user_email:      email,
+                user_name:       name,
+                user_job_title:  jobTitle,
+                user_department: department
             };
         }
         
@@ -236,11 +291,11 @@
         // WATSONX ORCHESTRATE EMBED INITIALIZATION
         // ============================================
         
-        function initializeWxOChat() {
+        async function initializeWxOChat() {
             log('Initializing watsonx Orchestrate chat...');
             
             // Extract user context
-            userContext = extractUserContext();
+            userContext = await extractUserContext();
             updateUserInfoDisplay(userContext);
             
             log('User context ready for injection', userContext);
