@@ -373,16 +373,14 @@
 
             script.addEventListener('load', function () {
                 log('wxO script loaded, calling init()...');
-                const instance = wxoLoader.init();
-                log('✅ wxO initialized');
 
-                // ALWAYS register pre:send hook - reads from global userContext dynamically
-                // This works even if context arrives AFTER wxO initializes
-                if (instance && typeof instance.on === 'function') {
-                    instance.on('pre:send', function(event) {
-                        const ctx = userContext; // always read latest global value
+                // Try to register pre:send BEFORE init() so it's ready immediately
+                const wxoTarget = wxoLoader;
+                if (wxoTarget && typeof wxoTarget.on === 'function') {
+                    wxoTarget.on('pre:send', function(event) {
+                        const ctx = userContext;
                         if (!ctx) {
-                            log('⚠️ pre:send fired but no userContext yet - access will be denied');
+                            log('⚠️ pre:send fired but no userContext yet');
                             return;
                         }
                         event.message = event.message || {};
@@ -399,9 +397,34 @@
                         };
                         log('📤 pre:send context injected for: ' + ctx.user_email);
                     });
-                    log('✅ pre:send hook registered (reads userContext dynamically)');
+                    log('✅ pre:send hook registered on wxoLoader directly');
                 } else {
-                    log('⚠️ instance.on() not available - pre:send hook could not be registered');
+                    log('⚠️ wxoLoader.on() not available either - logging wxoLoader keys: ' + Object.keys(wxoLoader).join(', '));
+                }
+
+                const instance = wxoLoader.init();
+                log('✅ wxO initialized - instance type: ' + typeof instance + ' keys: ' + (instance ? Object.keys(instance).join(', ') : 'null'));
+
+                // Also try on instance if it has .on()
+                if (instance && typeof instance.on === 'function') {
+                    instance.on('pre:send', function(event) {
+                        const ctx = userContext;
+                        if (!ctx) return;
+                        event.message = event.message || {};
+                        event.message.context = event.message.context || {};
+                        event.message.context.skills = {
+                            'main skill': {
+                                user_defined: {
+                                    user_email: ctx.user_email,
+                                    user_name: ctx.user_name,
+                                    user_job_title: ctx.user_job_title,
+                                    user_department: ctx.user_department
+                                }
+                            }
+                        };
+                        log('📤 pre:send (instance) context injected for: ' + ctx.user_email);
+                    });
+                    log('✅ pre:send hook also registered on instance');
                 }
             });
 
