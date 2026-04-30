@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ДП РВД Асистент - BULATSA HR Assistant</title>
-    <!-- v2.4 - 2026-04-30 - pre:send context injection via wxO instance.on() -->
+    <!-- v2.5 - 2026-04-30 - dynamic pre:send hook reads userContext, 3s timeout -->
     <style>
         body {
             margin: 0;
@@ -350,9 +350,9 @@
                         clearInterval(waitInterval);
                         log('✅ Context received after ' + waited + 'ms, loading wxO with context');
                         loadWxOScript(userContext);
-                    } else if (waited >= 15000) {
+                    } else if (waited >= 3000) {
                         clearInterval(waitInterval);
-                        log('⚠️ No context after 15s, loading wxO without context');
+                        log('⏳ Loading wxO after 3s - pre:send hook will pick up context when it arrives');
                         loadWxOScript(null);
                     }
                 }, 500);
@@ -376,26 +376,30 @@
                 const instance = wxoLoader.init();
                 log('✅ wxO initialized');
 
-                // Inject user context into EVERY outgoing message via pre:send
-                if (context && instance && typeof instance.on === 'function') {
+                // ALWAYS register pre:send hook - reads from global userContext dynamically
+                // This works even if context arrives AFTER wxO initializes
+                if (instance && typeof instance.on === 'function') {
                     instance.on('pre:send', function(event) {
+                        const ctx = userContext; // always read latest global value
+                        if (!ctx) {
+                            log('⚠️ pre:send fired but no userContext yet - access will be denied');
+                            return;
+                        }
                         event.message = event.message || {};
                         event.message.context = event.message.context || {};
                         event.message.context.skills = {
                             'main skill': {
                                 user_defined: {
-                                    user_email: context.user_email,
-                                    user_name: context.user_name,
-                                    user_job_title: context.user_job_title,
-                                    user_department: context.user_department
+                                    user_email: ctx.user_email,
+                                    user_name: ctx.user_name,
+                                    user_job_title: ctx.user_job_title,
+                                    user_department: ctx.user_department
                                 }
                             }
                         };
-                        log('📤 pre:send context injected for: ' + context.user_email);
+                        log('📤 pre:send context injected for: ' + ctx.user_email);
                     });
-                    log('✅ pre:send hook registered for: ' + context.user_email);
-                } else if (!context) {
-                    log('⚠️ No user context - tools will deny access by default');
+                    log('✅ pre:send hook registered (reads userContext dynamically)');
                 } else {
                     log('⚠️ instance.on() not available - pre:send hook could not be registered');
                 }
