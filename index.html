@@ -82,7 +82,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR TT</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR AEGAG</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -178,6 +178,16 @@
             'PradeepG@62tyb4.onmicrosoft.com': 'Accountant',        // Pradeep Gupta
         };
         
+        // Maps M365 email → real name in the vacation schedule Excel
+        // Only needed for staff whose M365 display name ≠ Bulgarian schedule name
+        const vacationAliasMap = {
+            'HenriettaM@62tyb4.onmicrosoft.com': 'Димитър Владимиров Томов',
+            'JohannaL@62tyb4.onmicrosoft.com':   'Людмил Емилов Аризанов',
+            'GradyA@62tyb4.onmicrosoft.com':     'Павлин Генчев Дулев',
+            // Directors/Managers — if their M365 name differs from schedule, add here
+            // Leave blank for President/HR who see all records anyway
+        };
+
         const departmentMap = {
             // PRESIDENT — sees everything
             'PattiF@62tyb4.onmicrosoft.com': 'Управление',
@@ -287,24 +297,29 @@
         }
 
         function buildContext(email, name) {
-            const jobTitle   = jobTitleMap[email]   || 'Staff';
-            const department = departmentMap[email] || 'Неизвестен';
-            log('Mapped user context', { email, jobTitle, department });
+            const jobTitle            = jobTitleMap[email]      || 'Staff';
+            const department          = departmentMap[email]   || 'Неизвестен';
+            const vacationEmployeeName = vacationAliasMap[email] || '';
+            log('Mapped user context', { email, jobTitle, department, vacationEmployeeName });
             return {
-                user_email:      email,
-                user_name:       name,
-                user_job_title:  jobTitle,
-                user_department: department
+                user_email:             email,
+                user_name:              name,
+                user_job_title:         jobTitle,
+                user_department:        department,
+                vacation_employee_name: vacationEmployeeName
             };
         }
         
         function updateUserInfoDisplay(context) {
             const userInfoDiv = document.getElementById('userInfo');
+            const aliasHtml = context.vacation_employee_name
+                ? ` | <strong>Псевдоним (отпуски):</strong> ${context.vacation_employee_name}`
+                : '';
             userInfoDiv.innerHTML = `
                 <strong>Потребител:</strong> ${context.user_name} 
                 (<strong>Email:</strong> ${context.user_email}) | 
                 <strong>Длъжност:</strong> ${context.user_job_title} | 
-                <strong>Отдел:</strong> ${context.user_department}
+                <strong>Отдел:</strong> ${context.user_department}${aliasHtml}
             `;
         }
         
@@ -331,8 +346,15 @@
                 chatOptions: {
                     agentId: "b57638c8-6239-430b-bce1-4b0e6a4be865",
                 },
-                // Flat shape — wxO maps these to context_variables declared in agent YAML
-                context: userContext
+                // Watson Assistant / wxO embedded chat context shape
+                // This is the shape confirmed to reach the tool's `context` dict parameter
+                context: {
+                    skills: {
+                        'main skill': {
+                            user_defined: userContext
+                        }
+                    }
+                }
             };
             
             log('wxOConfiguration ready with user context', userContext);
@@ -344,6 +366,28 @@
             script.addEventListener('load', function () {
                 log('wxO script loaded, initializing...');
                 wxoLoader.init();
+
+                // ── Belt-and-suspenders: re-inject context on every outgoing message ──
+                // wxOConfiguration.context covers the session start; pre:send covers
+                // subsequent turns in case the framework doesn't carry it forward.
+                try {
+                    wxoLoader.instance.on('pre:send', function (event) {
+                        if (!userContext) return;
+                        event.message.context = {
+                            ...(event.message.context || {}),
+                            skills: {
+                                'main skill': {
+                                    user_defined: userContext
+                                }
+                            }
+                        };
+                        log('pre:send context injected', userContext);
+                    });
+                    log('✅ pre:send listener registered');
+                } catch (e) {
+                    log('⚠️ pre:send registration failed (non-fatal)', { error: e.message });
+                }
+
                 log('✅ wxO initialized with user context embedded');
             });
             
