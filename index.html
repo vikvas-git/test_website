@@ -82,7 +82,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR XX</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR XD</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -219,18 +219,21 @@
                 log('MSAL accounts found', { count: accounts.length });
 
                 let tokenResponse;
-                if (accounts.length > 0) {
-                    // Silent token acquisition — no popup, no redirect
-                    tokenResponse = await msalInstance.acquireTokenSilent({
-                        scopes: ["User.Read"],
-                        account: accounts[0]
-                    });
-                } else {
-                    // No cached session — try silent login via SSO hint
-                    tokenResponse = await msalInstance.ssoSilent({
-                        scopes: ["User.Read"],
-                        loginHint: ""
-                    });
+                // ALWAYS try ssoSilent first — this checks the LIVE browser session,
+                // not the cache. Prevents stale cached user showing after account switch.
+                try {
+                    tokenResponse = await msalInstance.ssoSilent({ scopes: ["User.Read"] });
+                    log('ssoSilent succeeded', { account: tokenResponse.account?.username });
+                } catch (ssoError) {
+                    log('ssoSilent failed, trying cached account', { error: ssoError.message });
+                    if (accounts.length > 0) {
+                        tokenResponse = await msalInstance.acquireTokenSilent({
+                            scopes: ["User.Read"],
+                            account: accounts[0]
+                        });
+                    } else {
+                        throw ssoError; // no fallback available
+                    }
                 }
 
                 // Call Microsoft Graph /me to get real user info
