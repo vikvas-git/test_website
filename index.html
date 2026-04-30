@@ -80,7 +80,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR Човек2</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR БОТ</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -176,36 +176,49 @@
         };
         
         function extractUserContext() {
-            log('Extracting user context from SharePoint...');
-            
-            // Check if running in SharePoint
-            if (typeof _spPageContextInfo === 'undefined') {
-                log('⚠️ Not in SharePoint - using fallback test user');
+            log('Extracting user context...');
+
+            // ── Priority 1: URL query parameters (passed by SharePoint Script Editor) ──
+            const params = new URLSearchParams(window.location.search);
+            const paramEmail = params.get('email');
+            const paramName  = params.get('name');
+
+            if (paramEmail) {
+                log('✅ User context from URL params', { paramEmail, paramName });
+                const jobTitle   = jobTitleMap[paramEmail]   || 'Staff';
+                const department = departmentMap[paramEmail] || 'Неизвестен';
+                log('Mapped user context', { jobTitle, department });
                 return {
-                    user_email: 'admin@62tyb4.onmicrosoft.com',
-                    user_name: 'Test Admin',
-                    user_job_title: 'President',
-                    user_department: 'Управление'
+                    user_email:      paramEmail,
+                    user_name:       paramName || paramEmail,
+                    user_job_title:  jobTitle,
+                    user_department: department
                 };
             }
-            
-            // Extract from SharePoint context
-            const userEmail = _spPageContextInfo.userEmail || _spPageContextInfo.userLoginName;
-            const userName = _spPageContextInfo.userDisplayName;
-            
-            log('SharePoint user detected', { userEmail, userName });
-            
-            // Map to job title and department (PoC approach)
-            const jobTitle = jobTitleMap[userEmail] || 'Staff'; // Default to Staff (personal access)
-            const department = departmentMap[userEmail] || 'Неизвестен';
-            
-            log('Mapped user context', { jobTitle, department });
-            
+
+            // ── Priority 2: _spPageContextInfo (only present if served from SharePoint) ──
+            if (typeof _spPageContextInfo !== 'undefined') {
+                const userEmail = _spPageContextInfo.userEmail || _spPageContextInfo.userLoginName;
+                const userName  = _spPageContextInfo.userDisplayName;
+                log('✅ User context from _spPageContextInfo', { userEmail, userName });
+                const jobTitle   = jobTitleMap[userEmail]   || 'Staff';
+                const department = departmentMap[userEmail] || 'Неизвестен';
+                log('Mapped user context', { jobTitle, department });
+                return {
+                    user_email:      userEmail,
+                    user_name:       userName,
+                    user_job_title:  jobTitle,
+                    user_department: department
+                };
+            }
+
+            // ── Fallback: hardcoded test user (local dev only) ──
+            log('⚠️ No SharePoint context or URL params — using fallback test user');
             return {
-                user_email: userEmail,
-                user_name: userName,
-                user_job_title: jobTitle,
-                user_department: department
+                user_email:      'admin@62tyb4.onmicrosoft.com',
+                user_name:       'Test Admin',
+                user_job_title:  'President',
+                user_department: 'Управление'
             };
         }
         
