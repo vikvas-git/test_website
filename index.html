@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ДП РВД Асистент - BULATSA HR Assistant</title>
     <!-- MSAL.js for silent Microsoft 365 SSO -->
-    <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+    <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js" crossorigin="anonymous"></script>
     <style>
         body {
             margin: 0;
@@ -82,7 +82,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR DD</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR HIHI</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -109,7 +109,7 @@
             cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
         };
 
-        const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
+        let msalInstance = null;  // Created lazily once MSAL script is confirmed loaded
 
         // ============================================
         // USER CONTEXT EXTRACTION & INJECTION
@@ -205,6 +205,11 @@
 
             // ── Priority 2: MSAL silent SSO (reuses existing M365 browser session) ──
             try {
+                if (typeof msal === 'undefined') {
+                    throw new Error('MSAL library not loaded');
+                }
+
+                msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
                 await msalInstance.initialize();
 
                 // Handle redirect response if returning from login
