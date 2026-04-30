@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ДП РВД Асистент - BULATSA HR Assistant</title>
-    <!-- v2.2 - 2026-04-28 - cache bust, 15s wait confirmed -->
+    <!-- v2.4 - 2026-04-30 - pre:send context injection via wxO instance.on() -->
     <style>
         body {
             margin: 0;
@@ -212,7 +212,36 @@
                 };
             }
 
-            // Method 3: Wait for postMessage from parent SharePoint page (set via setupPostMessageListener)
+            // Method 3: Try SharePoint REST API directly (works when hosted on SharePoint domain)
+            const isSharePointHosted = window.location.hostname.includes('sharepoint.com');
+            if (isSharePointHosted) {
+                log('🔄 Hosted on SharePoint - trying REST API directly...');
+                fetch('/_api/web/currentuser', {
+                    headers: { 'Accept': 'application/json;odata=verbose' },
+                    credentials: 'same-origin'
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    const user = data.d || {};
+                    const email = user.Email || user.LoginName || '';
+                    const name = user.Title || email;
+                    if (email) {
+                        log('✅ REST API user (SharePoint-hosted)', { email, name });
+                        const emailKey = Object.keys(jobTitleMap).find(k => k.toLowerCase() === email.toLowerCase()) || email;
+                        userContext = {
+                            user_email: emailKey,
+                            user_name: name,
+                            user_job_title: jobTitleMap[emailKey] || 'Staff',
+                            user_department: departmentMap[emailKey] || 'Неизвестен'
+                        };
+                        updateUserInfoDisplay(userContext);
+                        if (!wxoInitialized) loadWxOScript(userContext);
+                    }
+                })
+                .catch(function(e) { log('REST API failed: ' + e); });
+            }
+
+            // Method 4: Wait for postMessage from parent SharePoint page (set via setupPostMessageListener)
             log('⏳ No context yet - waiting for postMessage from SharePoint parent...');
             return null; // Will be set later via postMessage
         }
@@ -336,7 +365,6 @@
 
             log('Loading wxO with context', context);
 
-            // Set config WITH context before init
             window.wxOConfiguration = buildWxOConfig(context);
             log('wxOConfiguration set', window.wxOConfiguration);
 
@@ -345,8 +373,32 @@
 
             script.addEventListener('load', function () {
                 log('wxO script loaded, calling init()...');
-                wxoLoader.init();
-                log('✅ wxO initialized with user context embedded in config');
+                const instance = wxoLoader.init();
+                log('✅ wxO initialized');
+
+                // Inject user context into EVERY outgoing message via pre:send
+                if (context && instance && typeof instance.on === 'function') {
+                    instance.on('pre:send', function(event) {
+                        event.message = event.message || {};
+                        event.message.context = event.message.context || {};
+                        event.message.context.skills = {
+                            'main skill': {
+                                user_defined: {
+                                    user_email: context.user_email,
+                                    user_name: context.user_name,
+                                    user_job_title: context.user_job_title,
+                                    user_department: context.user_department
+                                }
+                            }
+                        };
+                        log('📤 pre:send context injected for: ' + context.user_email);
+                    });
+                    log('✅ pre:send hook registered for: ' + context.user_email);
+                } else if (!context) {
+                    log('⚠️ No user context - tools will deny access by default');
+                } else {
+                    log('⚠️ instance.on() not available - pre:send hook could not be registered');
+                }
             });
 
             script.onerror = function() {
