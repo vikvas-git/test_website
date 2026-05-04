@@ -82,7 +82,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR FINAL</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR XD</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -327,6 +327,38 @@
         // WATSONX ORCHESTRATE EMBED INITIALIZATION
         // ============================================
         
+        // Handler to inject context into outgoing messages
+        // This is called by wxO's onLoad callback with the chat instance
+        function preSendHandler(event, instance) {
+            if (!userContext) {
+                log('⚠️ pre:send fired but userContext not ready');
+                return;
+            }
+            
+            // Inject context into message context (NOT message text)
+            event.message.context = {
+                ...event.message.context,
+                user_email: userContext.user_email,
+                user_name: userContext.user_name,
+                user_job_title: userContext.user_job_title,
+                user_department: userContext.user_department,
+                vacation_employee_name: userContext.vacation_employee_name
+            };
+            
+            log('✅ pre:send context injected', event.message.context);
+        }
+        
+        // Called when chat loads - receives the chat instance
+        function onChatLoad(instance) {
+            log('✅ Chat loaded, registering pre:send handler');
+            
+            // Register the pre:send event handler
+            // This is the CORRECT way per IBM documentation
+            instance.on('pre:send', preSendHandler);
+            
+            log('✅ pre:send listener registered successfully');
+        }
+        
         async function initializeWxOChat() {
             log('Initializing watsonx Orchestrate chat...');
             
@@ -336,7 +368,9 @@
             
             log('User context ready for injection', userContext);
             
-            // watsonx Orchestrate embed configuration with user context baked in
+            // watsonx Orchestrate embed configuration
+            // NOTE: Do NOT set context in chatOptions when using pre:send method
+            // The two methods (JWT context vs instance method) should not be mixed
             window.wxOConfiguration = {
                 orchestrationID: "bf1e7315f7df43dfb37efcb6aedefbd4_1e3b139c-c4ce-4b25-bc15-913d150d5c81",
                 hostURL: "https://eu-de.watson-orchestrate.cloud.ibm.com",
@@ -345,72 +379,19 @@
                 crn: "crn:v1:bluemix:public:watsonx-orchestrate:eu-de:a/bf1e7315f7df43dfb37efcb6aedefbd4:1e3b139c-c4ce-4b25-bc15-913d150d5c81::",
                 chatOptions: {
                     agentId: "b57638c8-6239-430b-bce1-4b0e6a4be865",
-                    // Pass context variables in chatOptions.context
-                    // wxO will map these to AgentRun.request_context in Python tools
-                    context: userContext
+                    onLoad: onChatLoad  // Register onLoad callback to get chat instance
                 }
             };
             
-            log('wxOConfiguration ready with user context', userContext);
+            log('wxOConfiguration ready (context will be injected via pre:send)');
             
             // Load wxO embed script
             const script = document.createElement('script');
             script.src = `${window.wxOConfiguration.hostURL}/wxochat/wxoLoader.js?embed=true`;
             
             script.addEventListener('load', function () {
-                log('wxO script loaded, initializing...');
-                
-                // Initialize wxO
-                wxoLoader.init().then(function() {
-                    log('wxO instance initialized');
-                    
-                    // ── Try to register pre:send event with retry logic ──
-                    let retryCount = 0;
-                    const maxRetries = 10;
-                    
-                    function tryRegisterPreSend() {
-                        try {
-                            if (wxoLoader.instance && wxoLoader.instance.on) {
-                                wxoLoader.instance.on('pre:send', function (event) {
-                                    if (!userContext) return;
-                                    
-                                    // Inject context into message context (NOT message text)
-                                    event.message.context = {
-                                        ...event.message.context,
-                                        user_email: userContext.user_email,
-                                        user_name: userContext.user_name,
-                                        user_job_title: userContext.user_job_title,
-                                        user_department: userContext.user_department,
-                                        vacation_employee_name: userContext.vacation_employee_name
-                                    };
-                                    
-                                    log('pre:send context injected', event.message.context);
-                                });
-                                log('✅ pre:send listener registered for context injection');
-                                return true;
-                            } else {
-                                retryCount++;
-                                if (retryCount < maxRetries) {
-                                    log(`⏳ Retry ${retryCount}/${maxRetries}: wxoLoader.instance not ready yet`);
-                                    setTimeout(tryRegisterPreSend, 500);
-                                } else {
-                                    log('⚠️ wxoLoader.instance not available after retries');
-                                }
-                                return false;
-                            }
-                        } catch (e) {
-                            log('⚠️ pre:send registration failed', { error: e.message });
-                            return false;
-                        }
-                    }
-                    
-                    // Start trying to register
-                    tryRegisterPreSend();
-                    
-                    log('✅ wxO initialized with user context embedded');
-                }).catch(function(err) {
-                    log('❌ wxO initialization failed', { error: err.message });
-                });
+                log('wxO script loaded, calling wxoLoader.init()...');
+                wxoLoader.init();
             });
             
             script.onerror = function() {
