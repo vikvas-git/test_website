@@ -82,7 +82,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR NEW</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR AGAIN</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -359,33 +359,43 @@
             
             script.addEventListener('load', function () {
                 log('wxO script loaded, initializing...');
-                wxoLoader.init();
+                
+                // Initialize wxO and wait for instance to be ready
+                wxoLoader.init().then(function() {
+                    log('wxO instance initialized');
+                    
+                    // ── Inject context on every outgoing message using wxO's native pre:send event ──
+                    // This ensures context variables are passed to AgentRun parameter in Python tools
+                    try {
+                        if (wxoLoader.instance && wxoLoader.instance.on) {
+                            wxoLoader.instance.on('pre:send', function (event) {
+                                if (!userContext) return;
+                                
+                                // Inject context into message context (NOT message text)
+                                // wxO will pass these to AgentRun.request_context in Python tools
+                                event.message.context = {
+                                    ...event.message.context,
+                                    user_email: userContext.user_email,
+                                    user_name: userContext.user_name,
+                                    user_job_title: userContext.user_job_title,
+                                    user_department: userContext.user_department,
+                                    vacation_employee_name: userContext.vacation_employee_name
+                                };
+                                
+                                log('pre:send context injected', event.message.context);
+                            });
+                            log('✅ pre:send listener registered for context injection');
+                        } else {
+                            log('⚠️ wxoLoader.instance not available yet');
+                        }
+                    } catch (e) {
+                        log('⚠️ pre:send registration failed', { error: e.message });
+                    }
 
-                // ── Inject context on every outgoing message using wxO's native pre:send event ──
-                // This ensures context variables are passed to AgentRun parameter in Python tools
-                try {
-                    wxoLoader.instance.on('pre:send', function (event) {
-                        if (!userContext) return;
-                        
-                        // Inject context into message context (NOT message text)
-                        // wxO will pass these to AgentRun.request_context in Python tools
-                        event.message.context = {
-                            ...event.message.context,
-                            user_email: userContext.user_email,
-                            user_name: userContext.user_name,
-                            user_job_title: userContext.user_job_title,
-                            user_department: userContext.user_department,
-                            vacation_employee_name: userContext.vacation_employee_name
-                        };
-                        
-                        log('pre:send context injected', event.message.context);
-                    });
-                    log('✅ pre:send listener registered for context injection');
-                } catch (e) {
-                    log('⚠️ pre:send registration failed (non-fatal)', { error: e.message });
-                }
-
-                log('✅ wxO initialized with user context embedded');
+                    log('✅ wxO initialized with user context embedded');
+                }).catch(function(err) {
+                    log('❌ wxO initialization failed', { error: err.message });
+                });
             });
             
             script.onerror = function() {
