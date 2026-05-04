@@ -82,7 +82,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR CMON</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR FINAL</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -345,10 +345,10 @@
                 crn: "crn:v1:bluemix:public:watsonx-orchestrate:eu-de:a/bf1e7315f7df43dfb37efcb6aedefbd4:1e3b139c-c4ce-4b25-bc15-913d150d5c81::",
                 chatOptions: {
                     agentId: "b57638c8-6239-430b-bce1-4b0e6a4be865",
-                },
-                // Pass context variables flat at top level so wxO maps them
-                // into AgentRun.request_context in Python tools
-                context: userContext
+                    // Pass context variables in chatOptions.context
+                    // wxO will map these to AgentRun.request_context in Python tools
+                    context: userContext
+                }
             };
             
             log('wxOConfiguration ready with user context', userContext);
