@@ -82,7 +82,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR DEEED</h1>
+        <h1>🤖 ДП РВД Асистент - BULATSA HR NEW</h1>
     </div>
     
     <div class="user-info" id="userInfo">
@@ -361,20 +361,26 @@
                 log('wxO script loaded, initializing...');
                 wxoLoader.init();
 
-                // ── Belt-and-suspenders: re-inject context on every outgoing message ──
-                // wxOConfiguration.context covers the session start; pre:send covers
-                // subsequent turns in case the framework doesn't carry it forward.
+                // ── Inject context on every outgoing message using wxO's native pre:send event ──
+                // This ensures context variables are passed to AgentRun parameter in Python tools
                 try {
                     wxoLoader.instance.on('pre:send', function (event) {
                         if (!userContext) return;
-                        // Flat top-level — wxO maps these into AgentRun.request_context
+                        
+                        // Inject context into message context (NOT message text)
+                        // wxO will pass these to AgentRun.request_context in Python tools
                         event.message.context = {
-                            ...(event.message.context || {}),
-                            ...userContext
+                            ...event.message.context,
+                            user_email: userContext.user_email,
+                            user_name: userContext.user_name,
+                            user_job_title: userContext.user_job_title,
+                            user_department: userContext.user_department,
+                            vacation_employee_name: userContext.vacation_employee_name
                         };
-                        log('pre:send context injected (flat)', userContext);
+                        
+                        log('pre:send context injected', event.message.context);
                     });
-                    log('✅ pre:send listener registered');
+                    log('✅ pre:send listener registered for context injection');
                 } catch (e) {
                     log('⚠️ pre:send registration failed (non-fatal)', { error: e.message });
                 }
