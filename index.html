@@ -15,7 +15,7 @@
             margin: 0;
             padding: 0;
             font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', 'Helvetica Neue', sans-serif;
-            background-color: #faf9f8;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
             overflow: hidden;
         }
         
@@ -258,6 +258,16 @@
         .loading-text {
             font-size: 14px;
             color: #605e5c;
+        }
+        
+        /* Hide watsonx Orchestrate profile badge (conflicts with our header badge) */
+        #wxo-chat-container [class*="profile"],
+        #wxo-chat-container [class*="Profile"],
+        #wxo-chat-container [class*="user-menu"],
+        #wxo-chat-container [class*="UserMenu"],
+        #wxo-chat-container [data-testid*="profile"],
+        #wxo-chat-container [data-testid*="user"] {
+            display: none !important;
         }
         
         /* Responsive Design */
@@ -593,7 +603,9 @@
                 crn: "crn:v1:bluemix:public:watsonx-orchestrate:eu-de:a/bf1e7315f7df43dfb37efcb6aedefbd4:1e3b139c-c4ce-4b25-bc15-913d150d5c81::",
                 chatOptions: {
                     agentId: "b57638c8-6239-430b-bce1-4b0e6a4be865",
-                    onLoad: onChatLoad
+                    onLoad: onChatLoad,
+                    hideUserProfile: true,  // Hide the built-in profile badge
+                    hideCloseButton: true   // Hide close button in embedded mode
                 }
             };
             
