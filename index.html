@@ -7,123 +7,361 @@
     <!-- MSAL.js for silent Microsoft 365 SSO -->
     <script src="https://alcdn.msauth.net/browser/2.28.1/js/msal-browser.min.js" crossorigin="anonymous"></script>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+        
         body {
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f5f5;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', 'Helvetica Neue', sans-serif;
+            background-color: #faf9f8;
+            overflow: hidden;
         }
         
+        /* Minimal Header - SharePoint Native Style */
         .header {
-            background-color: #0078d4;
-            color: white;
-            padding: 15px 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background-color: #ffffff;
+            border-bottom: 1px solid #edebe9;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 48px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
         }
         
-        .header h1 {
+        .header-title {
             margin: 0;
-            font-size: 24px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #323130;
+            letter-spacing: -0.01em;
+        }
+        
+        /* Floating User Badge - Top Right */
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background-color: #f3f2f1;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 13px;
+            color: #605e5c;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .user-badge:hover {
+            background-color: #edebe9;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+        
+        .user-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0078d4 0%, #106ebe 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
             font-weight: 600;
         }
         
-        .user-info {
-            background-color: #fff;
-            padding: 10px 20px;
-            border-bottom: 1px solid #e0e0e0;
-            font-size: 14px;
-            color: #333;
+        .user-name {
+            font-weight: 600;
+            color: #323130;
         }
         
-        .user-info strong {
-            color: #0078d4;
+        /* User Details Tooltip */
+        .user-details {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: white;
+            border: 1px solid #edebe9;
+            border-radius: 4px;
+            padding: 16px;
+            min-width: 280px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-8px);
+            transition: all 0.2s ease;
+            z-index: 1000;
         }
         
+        .user-badge:hover .user-details {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        
+        .user-details-row {
+            display: flex;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        .user-details-row:last-child {
+            margin-bottom: 0;
+        }
+        
+        .user-details-label {
+            font-weight: 600;
+            color: #605e5c;
+            min-width: 80px;
+        }
+        
+        .user-details-value {
+            color: #323130;
+        }
+        
+        /* Chat Container - Full Height */
         .chat-container {
             width: 100%;
-            height: calc(100vh - 120px);
+            height: calc(100vh - 48px);
             border: none;
+            background: #ffffff;
         }
         
+        /* Sign-in Overlay - SharePoint Style */
+        .sign-in-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            z-index: 999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+        }
+        
+        .sign-in-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0078d4 0%, #106ebe 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(0, 120, 212, 0.3);
+        }
+        
+        .sign-in-icon svg {
+            width: 32px;
+            height: 32px;
+            fill: white;
+        }
+        
+        .sign-in-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #323130;
+            margin: 0;
+        }
+        
+        .sign-in-subtitle {
+            font-size: 14px;
+            color: #605e5c;
+            margin: 0;
+        }
+        
+        .sign-in-button {
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 4px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Segoe UI', sans-serif;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 120, 212, 0.3);
+        }
+        
+        .sign-in-button:hover {
+            background: #106ebe;
+            box-shadow: 0 4px 8px rgba(0, 120, 212, 0.4);
+            transform: translateY(-1px);
+        }
+        
+        .sign-in-button:active {
+            transform: translateY(0);
+        }
+        
+        /* Debug Panel - Hidden by Default, Keyboard Shortcut Only */
         .debug-panel {
             position: fixed;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.8);
-            color: #0f0;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
+            bottom: 16px;
+            right: 16px;
+            background: rgba(32, 31, 30, 0.95);
+            color: #00ff00;
+            padding: 12px 16px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 11px;
             max-width: 400px;
             max-height: 200px;
             overflow-y: auto;
             display: none;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            z-index: 9999;
         }
         
         .debug-panel.show {
             display: block;
         }
         
-        .debug-toggle {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            background: #0078d4;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
-            z-index: 1000;
+        .debug-panel-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #00ff00;
+            border-bottom: 1px solid rgba(0, 255, 0, 0.3);
+            padding-bottom: 4px;
+        }
+        
+        /* Loading State */
+        .loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: calc(100vh - 48px);
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #edebe9;
+            border-top-color: #0078d4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            font-size: 14px;
+            color: #605e5c;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 640px) {
+            .header {
+                padding: 8px 16px;
+            }
+            
+            .header-title {
+                font-size: 14px;
+            }
+            
+            .user-badge {
+                padding: 4px 8px;
+                font-size: 12px;
+            }
+            
+            .user-avatar {
+                width: 20px;
+                height: 20px;
+                font-size: 10px;
+            }
+            
+            .user-details {
+                min-width: 240px;
+                right: -8px;
+            }
         }
     </style>
 </head>
 <body>
+    <!-- Minimal Header -->
     <div class="header">
-        <h1>🤖 ДП РВД Асистент - BULATSA HR XD</h1>
-    </div>
-    
-    <div class="user-info" id="userInfo">
-        <span>Зареждане на потребителска информация...</span>
+        <h1 class="header-title">ДП РВД Асистент</h1>
+        
+        <!-- Floating User Badge -->
+        <div class="user-badge" id="userBadge">
+            <div class="user-avatar" id="userAvatar">?</div>
+            <span class="user-name" id="userName">Зареждане...</span>
+            
+            <!-- User Details Tooltip -->
+            <div class="user-details" id="userDetails">
+                <div class="user-details-row">
+                    <span class="user-details-label">Email:</span>
+                    <span class="user-details-value" id="detailEmail">-</span>
+                </div>
+                <div class="user-details-row">
+                    <span class="user-details-label">Длъжност:</span>
+                    <span class="user-details-value" id="detailJobTitle">-</span>
+                </div>
+                <div class="user-details-row">
+                    <span class="user-details-label">Отдел:</span>
+                    <span class="user-details-value" id="detailDepartment">-</span>
+                </div>
+                <div class="user-details-row" id="detailAliasRow" style="display:none;">
+                    <span class="user-details-label">Псевдоним:</span>
+                    <span class="user-details-value" id="detailAlias">-</span>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Sign-in overlay (shown when silent SSO fails in iframe) -->
-    <div id="signInOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%;
-         background:rgba(245,245,245,0.97); z-index:999; display:none;
-         flex-direction:column; align-items:center; justify-content:center; gap:16px;">
-        <div style="font-size:48px;">🔐</div>
-        <div style="font-size:18px; color:#333; font-family:'Segoe UI',sans-serif;">Влезте с вашия Microsoft 365 акаунт</div>
-        <div style="font-size:13px; color:#666; font-family:'Segoe UI',sans-serif;">Необходима е автентикация за достъп до асистента</div>
-        <button id="signInBtn" onclick="triggerSignIn()"
-            style="background:#0078d4; color:white; border:none; padding:12px 32px;
-                   border-radius:6px; font-size:16px; cursor:pointer; font-family:'Segoe UI',sans-serif;">
-            🔑 Вход с Microsoft 365
+    <!-- Sign-in Overlay -->
+    <div class="sign-in-overlay" id="signInOverlay">
+        <div class="sign-in-icon">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+            </svg>
+        </div>
+        <h2 class="sign-in-title">Влезте с вашия Microsoft 365 акаунт</h2>
+        <p class="sign-in-subtitle">Необходима е автентикация за достъп до асистента</p>
+        <button class="sign-in-button" id="signInBtn" onclick="triggerSignIn()">
+            Вход с Microsoft 365
         </button>
     </div>
     
     <!-- watsonx Orchestrate Embed Container -->
-    <div id="wxo-chat-container" class="chat-container"></div>
+    <div id="wxo-chat-container" class="chat-container">
+        <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Зареждане на асистента...</div>
+        </div>
+    </div>
     
-    <!-- Debug Panel -->
-    <button class="debug-toggle" onclick="toggleDebug()">🐛 Debug</button>
-    <div id="debugPanel" class="debug-panel"></div>
+    <!-- Debug Panel (Ctrl+Shift+D to toggle) -->
+    <div id="debugPanel" class="debug-panel">
+        <div class="debug-panel-title">Debug Log</div>
+        <div id="debugContent"></div>
+    </div>
     
     <script>
         // ============================================
-        // MSAL CONFIG — update CLIENT_ID after Azure app registration
+        // MSAL CONFIG
         // ============================================
         const MSAL_CONFIG = {
             auth: {
-                clientId: "261b05d3-dce5-4db9-8ca3-41c91c05f260",   // ← only thing you need to change
+                clientId: "261b05d3-dce5-4db9-8ca3-41c91c05f260",
                 authority: "https://login.microsoftonline.com/3604d49a-1aa7-4e3a-b14a-7ebd2c51115f",
                 redirectUri: "https://vikvas-git.github.io/test_website/index.html"
             },
             cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
         };
 
-        let msalInstance = null;  // Created lazily once MSAL script is confirmed loaded
+        let msalInstance = null;
 
         // ============================================
         // USER CONTEXT EXTRACTION & INJECTION
@@ -141,74 +379,57 @@
         }
         
         function updateDebugPanel() {
-            const panel = document.getElementById('debugPanel');
-            panel.innerHTML = debugLogs.slice(-10).join('<br>');
+            const content = document.getElementById('debugContent');
+            if (content) {
+                content.innerHTML = debugLogs.slice(-15).join('<br>');
+            }
         }
         
-        function toggleDebug() {
-            const panel = document.getElementById('debugPanel');
-            panel.classList.toggle('show');
-        }
+        // Keyboard shortcut: Ctrl+Shift+D to toggle debug
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                const panel = document.getElementById('debugPanel');
+                panel.classList.toggle('show');
+            }
+        });
         
-        // Job Title Mapping - Using your actual Microsoft 365 users
+        // Job Title Mapping
         const jobTitleMap = {
-            // PRESIDENT (Full Access)
-            'PattiF@62tyb4.onmicrosoft.com': 'President',           // Patti Fernandez - President
-            'admin@62tyb4.onmicrosoft.com': 'President',            // Viktor Vasilev - Admin (Full Access)
-            
-            // HR MANAGER (All Employees Access)
-            'DiegoS@62tyb4.onmicrosoft.com': 'HR Manager',          // Diego Siciliani - HR Manager
-            
-            // DIRECTORS/MANAGERS (Department Access)
-            'LeeG@62tyb4.onmicrosoft.com': 'Director',              // Lee Gu - Director
-            'MiriamG@62tyb4.onmicrosoft.com': 'Director',           // Miriam Graham - Director
-            'NestorW@62tyb4.onmicrosoft.com': 'Director',           // Nestor Wilke - Director
-            'MeganB@62tyb4.onmicrosoft.com': 'Marketing Manager',   // Megan Bowen - Marketing Manager
-            'LidiaH@62tyb4.onmicrosoft.com': 'Product Manager',     // Lidia Holloway - Product Manager
-            'AdeleV@62tyb4.onmicrosoft.com': 'Retail Manager',      // Adele Vance - Retail Manager
-            
-            // STAFF (Personal Access Only)
-            'AlexW@62tyb4.onmicrosoft.com': 'Marketing Assistant',  // Alex Wilber
-            'GradyA@62tyb4.onmicrosoft.com': 'Designer',            // Grady Archie
-            'HenriettaM@62tyb4.onmicrosoft.com': 'Developer',       // Henrietta Mueller
-            'IsaiahL@62tyb4.onmicrosoft.com': 'Sales Rep',          // Isaiah Langer
-            'JohannaL@62tyb4.onmicrosoft.com': 'Senior Engineer',   // Johanna Lorenz
-            'JoniS@62tyb4.onmicrosoft.com': 'Paralegal',            // Joni Sherman
-            'LynneR@62tyb4.onmicrosoft.com': 'Planner',             // Lynne Robbins
-            'PradeepG@62tyb4.onmicrosoft.com': 'Accountant',        // Pradeep Gupta
+            'PattiF@62tyb4.onmicrosoft.com': 'President',
+            'admin@62tyb4.onmicrosoft.com': 'President',
+            'DiegoS@62tyb4.onmicrosoft.com': 'HR Manager',
+            'LeeG@62tyb4.onmicrosoft.com': 'Director',
+            'MiriamG@62tyb4.onmicrosoft.com': 'Director',
+            'NestorW@62tyb4.onmicrosoft.com': 'Director',
+            'MeganB@62tyb4.onmicrosoft.com': 'Marketing Manager',
+            'LidiaH@62tyb4.onmicrosoft.com': 'Product Manager',
+            'AdeleV@62tyb4.onmicrosoft.com': 'Retail Manager',
+            'AlexW@62tyb4.onmicrosoft.com': 'Marketing Assistant',
+            'GradyA@62tyb4.onmicrosoft.com': 'Designer',
+            'HenriettaM@62tyb4.onmicrosoft.com': 'Developer',
+            'IsaiahL@62tyb4.onmicrosoft.com': 'Sales Rep',
+            'JohannaL@62tyb4.onmicrosoft.com': 'Senior Engineer',
+            'JoniS@62tyb4.onmicrosoft.com': 'Paralegal',
+            'LynneR@62tyb4.onmicrosoft.com': 'Planner',
+            'PradeepG@62tyb4.onmicrosoft.com': 'Accountant',
         };
         
-        // Maps M365 email → real name in the vacation schedule Excel
-        // Only needed for staff whose M365 display name ≠ Bulgarian schedule name
         const vacationAliasMap = {
             'HenriettaM@62tyb4.onmicrosoft.com': 'Димитър Владимиров Томов',
             'JohannaL@62tyb4.onmicrosoft.com':   'Людмил Емилов Аризанов',
             'GradyA@62tyb4.onmicrosoft.com':     'Павлин Генчев Дулев',
-            // Directors/Managers — if their M365 name differs from schedule, add here
-            // Leave blank for President/HR who see all records anyway
         };
 
         const departmentMap = {
-            // PRESIDENT — sees everything
             'PattiF@62tyb4.onmicrosoft.com': 'Управление',
             'admin@62tyb4.onmicrosoft.com':  'Управление',
-
-            // HR MANAGER — sees all employees
             'DiegoS@62tyb4.onmicrosoft.com': 'Човешки ресурси',
-
-            // DIRECTORS — mapped to real GFP departments for demo
-            'LeeG@62tyb4.onmicrosoft.com':   'Управление на собствеността',  // projects: зелени площи, обзавеждане, автомобили
-            'NestorW@62tyb4.onmicrosoft.com':'Дирекция ИС',                  // projects: принтери, сървъри, ИТ поддръжка
-            'MiriamG@62tyb4.onmicrosoft.com':'Финанси',                      // projects: счетоводен софтуер
+            'LeeG@62tyb4.onmicrosoft.com':   'Управление на собствеността',
+            'NestorW@62tyb4.onmicrosoft.com':'Дирекция ИС',
+            'MiriamG@62tyb4.onmicrosoft.com':'Финанси',
             'MeganB@62tyb4.onmicrosoft.com': 'Управление на собствеността',
             'LidiaH@62tyb4.onmicrosoft.com': 'Дирекция ИС',
             'AdeleV@62tyb4.onmicrosoft.com': 'Финанси',
-
-            // STAFF — mapped to real departments, DENIED financial/network
-            // Vacation name mapping to real names in vacation schedule:
-            // HenriettaM → "Димитър Владимиров Томов"  (Специалист - системен администратор)
-            // JohannaL   → "Людмил Емилов Аризанов"    (Експерт)
-            // GradyA     → "Павлин Генчев Дулев"        (Експерт)
             'HenriettaM@62tyb4.onmicrosoft.com': 'Дирекция ИС',
             'JohannaL@62tyb4.onmicrosoft.com':   'Дирекция ИС',
             'GradyA@62tyb4.onmicrosoft.com':     'Дирекция ИС',
@@ -222,16 +443,16 @@
         async function extractUserContext() {
             log('Extracting user context via MSAL silent SSO...');
 
-            // ── Priority 1: URL query parameters (manual override / testing) ──
+            // Priority 1: URL query parameters
             const params = new URLSearchParams(window.location.search);
             const paramEmail = params.get('email');
             const paramName  = params.get('name');
             if (paramEmail) {
-                log('✅ User context from URL params', { paramEmail, paramName });
+                log('User context from URL params', { paramEmail, paramName });
                 return buildContext(paramEmail, paramName || paramEmail);
             }
 
-            // ── Priority 2: MSAL silent SSO ──
+            // Priority 2: MSAL silent SSO
             try {
                 if (typeof msal === 'undefined') throw new Error('MSAL library not loaded');
 
@@ -261,9 +482,8 @@
                 return await fetchGraphMe(tokenResponse.accessToken);
 
             } catch (msalError) {
-                log('⚠️ Silent SSO failed — showing sign-in button', { error: msalError.message });
+                log('Silent SSO failed — showing sign-in button', { error: msalError.message });
 
-                // Show sign-in button overlay — popups must be user-gesture triggered
                 return new Promise((resolve) => {
                     const overlay = document.getElementById('signInOverlay');
                     overlay.style.display = 'flex';
@@ -282,7 +502,7 @@
                     window._signInResolve = null;
                 }
             } catch (err) {
-                log('❌ Sign-in failed', { error: err.message });
+                log('Sign-in failed', { error: err.message });
                 alert('Входът не беше успешен. Моля, опитайте отново.');
             }
         }
@@ -292,7 +512,7 @@
                 headers: { Authorization: `Bearer ${accessToken}` }
             });
             const me = await graphResponse.json();
-            log('✅ Graph /me response', { email: me.mail || me.userPrincipalName, name: me.displayName });
+            log('Graph /me response', { email: me.mail || me.userPrincipalName, name: me.displayName });
             return buildContext(me.mail || me.userPrincipalName, me.displayName);
         }
 
@@ -311,31 +531,34 @@
         }
         
         function updateUserInfoDisplay(context) {
-            const userInfoDiv = document.getElementById('userInfo');
-            const aliasHtml = context.vacation_employee_name
-                ? ` | <strong>Псевдоним (отпуски):</strong> ${context.vacation_employee_name}`
-                : '';
-            userInfoDiv.innerHTML = `
-                <strong>Потребител:</strong> ${context.user_name} 
-                (<strong>Email:</strong> ${context.user_email}) | 
-                <strong>Длъжност:</strong> ${context.user_job_title} | 
-                <strong>Отдел:</strong> ${context.user_department}${aliasHtml}
-            `;
+            // Update user badge
+            const userName = document.getElementById('userName');
+            const userAvatar = document.getElementById('userAvatar');
+            
+            userName.textContent = context.user_name.split(' ')[0]; // First name only
+            userAvatar.textContent = context.user_name.charAt(0).toUpperCase();
+            
+            // Update tooltip details
+            document.getElementById('detailEmail').textContent = context.user_email;
+            document.getElementById('detailJobTitle').textContent = context.user_job_title;
+            document.getElementById('detailDepartment').textContent = context.user_department;
+            
+            if (context.vacation_employee_name) {
+                document.getElementById('detailAlias').textContent = context.vacation_employee_name;
+                document.getElementById('detailAliasRow').style.display = 'flex';
+            }
         }
         
         // ============================================
         // WATSONX ORCHESTRATE EMBED INITIALIZATION
         // ============================================
         
-        // Handler to inject context into outgoing messages
-        // This is called by wxO's onLoad callback with the chat instance
         function preSendHandler(event, instance) {
             if (!userContext) {
-                log('⚠️ pre:send fired but userContext not ready');
+                log('pre:send fired but userContext not ready');
                 return;
             }
             
-            // Inject context into message context (NOT message text)
             event.message.context = {
                 ...event.message.context,
                 user_email: userContext.user_email,
@@ -345,32 +568,23 @@
                 vacation_employee_name: userContext.vacation_employee_name
             };
             
-            log('✅ pre:send context injected', event.message.context);
+            log('pre:send context injected', event.message.context);
         }
         
-        // Called when chat loads - receives the chat instance
         function onChatLoad(instance) {
-            log('✅ Chat loaded, registering pre:send handler');
-            
-            // Register the pre:send event handler
-            // This is the CORRECT way per IBM documentation
+            log('Chat loaded, registering pre:send handler');
             instance.on('pre:send', preSendHandler);
-            
-            log('✅ pre:send listener registered successfully');
+            log('pre:send listener registered successfully');
         }
         
         async function initializeWxOChat() {
             log('Initializing watsonx Orchestrate chat...');
             
-            // Extract user context
             userContext = await extractUserContext();
             updateUserInfoDisplay(userContext);
             
             log('User context ready for injection', userContext);
             
-            // watsonx Orchestrate embed configuration
-            // NOTE: Do NOT set context in chatOptions when using pre:send method
-            // The two methods (JWT context vs instance method) should not be mixed
             window.wxOConfiguration = {
                 orchestrationID: "bf1e7315f7df43dfb37efcb6aedefbd4_1e3b139c-c4ce-4b25-bc15-913d150d5c81",
                 hostURL: "https://eu-de.watson-orchestrate.cloud.ibm.com",
@@ -379,13 +593,12 @@
                 crn: "crn:v1:bluemix:public:watsonx-orchestrate:eu-de:a/bf1e7315f7df43dfb37efcb6aedefbd4:1e3b139c-c4ce-4b25-bc15-913d150d5c81::",
                 chatOptions: {
                     agentId: "b57638c8-6239-430b-bce1-4b0e6a4be865",
-                    onLoad: onChatLoad  // Register onLoad callback to get chat instance
+                    onLoad: onChatLoad
                 }
             };
             
             log('wxOConfiguration ready (context will be injected via pre:send)');
             
-            // Load wxO embed script
             const script = document.createElement('script');
             script.src = `${window.wxOConfiguration.hostURL}/wxochat/wxoLoader.js?embed=true`;
             
@@ -395,7 +608,7 @@
             });
             
             script.onerror = function() {
-                log('❌ Failed to load wxO script');
+                log('Failed to load wxO script');
                 alert('Failed to load chat. Please check your configuration.');
             };
             
@@ -406,7 +619,6 @@
         // INITIALIZATION
         // ============================================
         
-        // Wait for DOM to be ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initializeWxOChat);
         } else {
