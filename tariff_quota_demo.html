@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Мониторинг на тарифни квоти — Митническа Агенция България</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;font-family:'IBM Plex Sans','Segoe UI',Arial,sans-serif;
+              background:#F4F6F9;color:#21272A;overflow:hidden}
+
+    /* ── Header ────────────────────────────────────────────────────── */
+    #hdr{height:52px;background:linear-gradient(90deg,#001F4D 0%,#003087 55%,#005B99 100%);
+         display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;
+         box-shadow:0 2px 10px rgba(0,0,0,.45);z-index:300}
+    #hdr-logo{width:34px;height:34px;background:rgba(255,255,255,.15);border-radius:8px;
+              display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+    #hdr-title{color:#fff;font-size:13px;font-weight:700;line-height:1.2;flex:1;min-width:0}
+    #hdr-sub{font-size:9.5px;font-weight:400;color:#8BB8DC;margin-top:2px;
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .hkpi{text-align:center;color:#fff;border-left:1px solid rgba(255,255,255,.2);
+          padding:0 13px;flex-shrink:0}
+    .hkpi-v{font-size:15px;font-weight:700;line-height:1}
+    .hkpi-l{font-size:8.5px;color:#8BB8DC;margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+    .live-dot{width:8px;height:8px;background:#00E5A0;border-radius:50%;
+              animation:pulse 2s infinite;margin-right:5px;display:inline-block;vertical-align:middle}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    #app{display:flex;height:calc(100vh - 52px);overflow:hidden}
+
+    /* ── LEFT: WXO Chat Panel ───────────────────────────────────────── */
+    #cpanel{width:390px;min-width:300px;max-width:540px;background:#fff;
+            display:flex;flex-direction:column;border-right:2px solid #D8E8F8;flex-shrink:0}
+    #cph{background:#003087;color:#fff;padding:9px 13px;font-size:11.5px;font-weight:600;
+         display:flex;align-items:center;gap:7px;flex-shrink:0}
+
+    /* Hint strip — appears when agent triggers a tab switch */
+    #hbadge{display:none;align-items:center;gap:7px;padding:5px 12px;
+            background:#E4EFFE;border-bottom:1px solid #B8D0F8;
+            font-size:11px;color:#003087;font-weight:500;flex-shrink:0}
+    #hbadge.on{display:flex}
+    #hclose{cursor:pointer;color:#555;margin-left:auto;padding:1px 5px;
+            border-radius:3px;font-size:12px;line-height:1}
+    #hclose:hover{background:#B8D0F8}
+
+    /* WXO mounts here — fills remaining height */
+    #wxo-mount{flex:1;overflow:hidden;position:relative;min-height:0;background:#F8FAFF}
+
+    /* ── Resizer ────────────────────────────────────────────────────── */
+    #rz{width:5px;background:#DCE8F5;cursor:col-resize;flex-shrink:0;transition:background .15s}
+    #rz:hover,#rz.d{background:#003087}
+
+    /* ── RIGHT: Dashboard panel ─────────────────────────────────────── */
+    #dpanel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+    /* Tab bar */
+    #tabs{display:flex;background:#001A50;flex-shrink:0;border-bottom:2px solid #00367A}
+    .tab{padding:0 17px;height:42px;display:flex;align-items:center;gap:6px;
+         color:#7BA8D4;font-size:11.5px;cursor:pointer;white-space:nowrap;
+         border-bottom:3px solid transparent;transition:all .12s;user-select:none}
+    .tab:hover{color:#fff;background:rgba(255,255,255,.07)}
+    .tab.on{color:#fff;border-bottom-color:#00C8FF;font-weight:600}
+    .tab.ai-hint{background:rgba(0,200,255,.12)!important;border-bottom-color:#00C8FF!important;
+                 color:#fff!important}
+
+    /* Status strip */
+    #strip{padding:4px 14px;background:#E4EFFE;border-bottom:1px solid #B8D0F8;
+           font-size:10px;color:#003087;display:flex;align-items:center;gap:8px;flex-shrink:0}
+    #strip strong{font-weight:700}
+    #ai-badge{display:none;background:#003087;color:#fff;padding:1px 9px;
+              border-radius:7px;font-size:9px;margin-left:auto;letter-spacing:.3px}
+    #ai-badge.on{display:inline-block}
+
+    /* Loading overlay */
+    #fwrap{flex:1;position:relative;overflow:hidden;background:#eef2f8}
+    #cogframe{width:100%;height:100%;border:none;display:block}
+    #spin{position:absolute;inset:0;background:rgba(238,242,248,.85);
+          display:flex;align-items:center;justify-content:center;
+          flex-direction:column;gap:10px;z-index:10;transition:opacity .3s}
+    #spin.hidden{opacity:0;pointer-events:none}
+    .sp{width:36px;height:36px;border:3px solid #B8D0F8;border-top-color:#003087;
+        border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    #spin-msg{font-size:11px;color:#446;letter-spacing:.3px}
+
+    /* ── WXO sizing overrides ───────────────────────────────────────── */
+    #wxo-mount > *{position:absolute!important;inset:0!important;
+                   width:100%!important;height:100%!important;
+                   max-width:none!important;max-height:none!important;
+                   border-radius:0!important;box-shadow:none!important;
+                   margin:0!important}
+  </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ══════════════════════════════════════════════════════════ -->
+<div id="hdr">
+  <div id="hdr-logo">🛃</div>
+  <div id="hdr-title">Мониторинг на тарифни квоти
+    <div id="hdr-sub">EU Защитни мерки · Глави 72 &amp; 73 · Произход Турция · Митническа Агенция България · 2019–2025</div>
+  </div>
+  <div class="hkpi"><div class="hkpi-v">13 650</div><div class="hkpi-l">Декларации</div></div>
+  <div class="hkpi"><div class="hkpi-v" style="color:#FFB347">€6.91M</div><div class="hkpi-l">Загуба приходи</div></div>
+  <div class="hkpi"><div class="hkpi-v" style="color:#FF6B6B">92</div><div class="hkpi-l">Риск 3C</div></div>
+  <div class="hkpi"><div class="hkpi-v">40</div><div class="hkpi-l">Активни квоти</div></div>
+  <div class="hkpi" style="border-left:1px solid rgba(255,255,255,.2);padding-left:13px">
+    <div class="hkpi-v" style="font-size:11px">
+      <span class="live-dot"></span>watsonx Live
+    </div>
+    <div class="hkpi-l">Orchestrate</div>
+  </div>
+</div>
+
+<!-- ═══ MAIN ═════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── LEFT: AI Chat ──────────────────────────────────────────────────── -->
+  <div id="cpanel">
+    <div id="cph">
+      <span class="live-dot"></span>
+      AI Асистент · watsonx Orchestrate · tariff_quota_monitor
+    </div>
+
+    <!-- Appears when AI routes to a dashboard page -->
+    <div id="hbadge">
+      <span id="h-icon">📊</span>
+      <span id="h-txt">Превключване към таблото…</span>
+      <span id="hclose" onclick="dismissHint()">✕</span>
+    </div>
+
+    <!-- WXO webchat widget mounts here -->
+    <div id="wxo-mount"></div>
+  </div>
+
+  <!-- ── RESIZER ──────────────────────────────────────────────────────────── -->
+  <div id="rz"></div>
+
+  <!-- ── RIGHT: Cognos Dashboard ─────────────────────────────────────────── -->
+  <div id="dpanel">
+
+    <!-- Tab bar — visual indicator of active Cognos page -->
+    <div id="tabs">
+      <div class="tab on" data-idx="0">📊&nbsp;Преглед на квоти</div>
+      <div class="tab"    data-idx="1">⚠️&nbsp;Рискови вносители</div>
+      <div class="tab"    data-idx="2">💰&nbsp;Загуба на приходи</div>
+      <div class="tab"    data-idx="3">🔮&nbsp;Прогноза и сигнали</div>
+    </div>
+
+    <!-- Status strip -->
+    <div id="strip">
+      <span>📌 Активна страница:</span>
+      <strong id="page-lbl">📊 Преглед на квоти</strong>
+      <span id="ai-badge">🤖 Превключено от AI</span>
+    </div>
+
+    <!-- Cognos iframe -->
+    <div id="fwrap">
+      <iframe id="cogframe"
+        src="about:blank"
+        allow="fullscreen"
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation allow-modals">
+      </iframe>
+      <div id="spin">
+        <div class="sp"></div>
+        <div id="spin-msg">Зареждане на таблото…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   CONFIGURATION — edit these if URLs change
+   ════════════════════════════════════════════════════════════════════════ */
+const CFG = {
+  // Cognos base URL — same origin as this HTML when served from webcontent\Custom\
+  cognosBase:  'http://useast.services.cloud.techzone.ibm.com:23661',
+  dashboardId: 'iCB3ECA38AE0E47558AC5783659E850B1',
+
+  // WXO agent config
+  wxo: {
+    orchestrationID: 'e3e27e19f79b419287ec1972448924d0_37478da1-a7f1-42d1-bf84-52d550b15074',
+    hostURL:         'https://eu-de.watson-orchestrate.cloud.ibm.com',
+    rootElementID:   'wxo-mount',
+    showLauncher:    false,
+    crn: 'crn:v1:bluemix:public:watsonx-orchestrate:eu-de:a/e3e27e19f79b419287ec1972448924d0:37478da1-a7f1-42d1-bf84-52d550b15074::',
+    deploymentPlatform: 'ibmcloud',
+    chatOptions: { agentId: '611bd166-5f76-402c-9e45-39267564728b' }
+  }
+};
+
+/* Tab definitions */
+const TABS = [
+  { idx:0, lbl:'📊 Преглед на квоти',   icon:'📊', hint:'quota_overview'   },
+  { idx:1, lbl:'⚠️ Рискови вносители', icon:'⚠️', hint:'importer_risk'    },
+  { idx:2, lbl:'💰 Загуба на приходи',  icon:'💰', hint:'state_loss'       },
+  { idx:3, lbl:'🔮 Прогноза и сигнали', icon:'🔮', hint:'forecast_alerts'  },
+];
+const HINT_TO_IDX = Object.fromEntries(TABS.map(t => [t.hint, t.idx]));
+
+/* ════════════════════════════════════════════════════════════════════════
+   STATE
+   ════════════════════════════════════════════════════════════════════════ */
+let activeTab   = 0;        // currently shown tab index
+let cogApi      = null;     // Cognos JS API handle (populated after SDK loads)
+let cogBoard    = null;     // Cognos board/dashboard handle
+let cogPages    = null;     // array of page handles from Cognos API
+let autoTimer   = null;
+let hintTimer   = null;
+let frameReady  = false;    // true once iframe fires its first load event
+
+/* ════════════════════════════════════════════════════════════════════════
+   COGNOS IFRAME INIT
+   Load the dashboard into the iframe. The Cognos JS API (CognosApi) is
+   loaded from the same server, so same-origin restrictions don't apply.
+   ════════════════════════════════════════════════════════════════════════ */
+const DASH_URL = `${CFG.cognosBase}/bi/?perspective=dashboard` +
+                 `&objRef=${CFG.dashboardId}&isAuthoringMode=false`;
+const SDK_URL  = `${CFG.cognosBase}/bi/v1/ext/com.ibm.bi.dashboard.core-features` +
+                 `/js/dashboard/dashboard-sdk.js`;
+
+function initCognos() {
+  const fr = document.getElementById('cogframe');
+  const sp = document.getElementById('spin');
+
+  // Show spinner, load dashboard
+  sp.classList.remove('hidden');
+  fr.src = DASH_URL;
+
+  fr.addEventListener('load', () => {
+    frameReady = true;
+    // Try to load the Cognos SDK and get API handle
+    loadCognosSDK();
+    // Spinner hides after a short delay to let Cognos render
+    setTimeout(() => sp.classList.add('hidden'), 2500);
+  }, { once: true });
+}
+
+function loadCognosSDK() {
+  const s = document.createElement('script');
+  s.src = SDK_URL;
+  s.onload = () => {
+    // SDK may expose DashboardAPI or CognosApi depending on version
+    const ApiClass = window.DashboardAPI || window.CognosApi;
+    if (!ApiClass) {
+      console.info('Cognos SDK loaded but no API class found — tab switching via URL fallback');
+      return;
+    }
+    try {
+      cogApi = new ApiClass({
+        cognosRootURL:    CFG.cognosBase + '/bi/',
+        useSharedSession: true,   // reuses the existing Cognos session cookie
+        sessionCode:      null
+      });
+      // Get the board so we can switch pages programmatically
+      cogApi.getBoard().then(board => {
+        cogBoard = board;
+        cogPages = board.getPages();
+        console.log(`✅ Cognos API ready — ${cogPages ? cogPages.length : '?'} pages`);
+      }).catch(e => console.warn('Cognos getBoard failed:', e));
+    } catch (e) {
+      console.warn('Cognos API init error:', e);
+    }
+  };
+  s.onerror = () => console.info('Cognos SDK not found — using URL reload fallback');
+  document.head.appendChild(s);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   TAB SWITCHING
+   Three methods tried in order:
+   1. Cognos JS API (setCurrentPage) — instant, no flash, same-origin only
+   2. URL reload with cache-buster — always works, causes brief flash
+   ════════════════════════════════════════════════════════════════════════ */
+function switchTab(idx, triggeredByAI = false) {
+  if (idx === activeTab && !triggeredByAI) return;
+  activeTab = idx;
+
+  /* Update tab pill UI */
+  document.querySelectorAll('.tab').forEach(t => {
+    const i = +t.dataset.idx;
+    t.classList.toggle('on', i === idx);
+    t.classList.remove('ai-hint');
+  });
+  if (triggeredByAI) {
+    document.querySelectorAll('.tab')[idx].classList.add('ai-hint');
+    setTimeout(() => document.querySelectorAll('.tab')[idx].classList.remove('ai-hint'), 3000);
+  }
+
+  /* Update status strip */
+  document.getElementById('page-lbl').textContent = TABS[idx].lbl;
+  const aiBadge = document.getElementById('ai-badge');
+  if (triggeredByAI) {
+    aiBadge.classList.add('on');
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => aiBadge.classList.remove('on'), 7000);
+  } else {
+    aiBadge.classList.remove('on');
+  }
+
+  /* Method 1: Cognos JS API — no page reload, instant */
+  if (cogBoard && cogPages && cogPages[idx]) {
+    try {
+      cogBoard.setCurrentPage(cogPages[idx].getId());
+      console.log(`✅ Cognos API: switched to page ${idx}`);
+      return;
+    } catch (e) {
+      console.warn('cogBoard.setCurrentPage failed, falling back to reload:', e);
+    }
+  }
+
+  /* Method 2: URL reload (same-origin — no cookie issue) */
+  const fr = document.getElementById('cogframe');
+  const sp = document.getElementById('spin');
+  sp.classList.remove('hidden');
+  fr.onload = () => setTimeout(() => sp.classList.add('hidden'), 2000);
+  fr.src = DASH_URL + `&_t=${Date.now()}`;
+  console.log(`ℹ️ Tab ${idx}: URL reload (Cognos API not ready yet)`);
+}
+
+/* Manual tab click */
+document.querySelectorAll('.tab').forEach(t =>
+  t.addEventListener('click', () => switchTab(+t.dataset.idx, false))
+);
+
+/* ════════════════════════════════════════════════════════════════════════
+   HINT BADGE (above WXO chat)
+   ════════════════════════════════════════════════════════════════════════ */
+function showHint(tabIdx) {
+  const tab = TABS[tabIdx];
+  if (!tab) return;
+  document.getElementById('h-icon').textContent = tab.icon;
+  document.getElementById('h-txt').innerHTML =
+    `AI превключва към <strong>${tab.lbl}</strong>`;
+  document.getElementById('hbadge').classList.add('on');
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(dismissHint, 8000);
+}
+function dismissHint() {
+  document.getElementById('hbadge').classList.remove('on');
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   AGENT RESPONSE ROUTING
+   Parse dashboard_hint from agent tool responses → switch Cognos tab.
+   Two methods: structured JSON field (from our tools) + keyword fallback.
+   ════════════════════════════════════════════════════════════════════════ */
+const KW = [
+  { t:2, r:/загуба|приход|мито|ддс|ценова.?аном|fiscal|loss|vat|duty|state.?loss|revenue/i },
+  { t:3, r:/прогноза|predict|изчерп|forecast|проект|дневна.?консум|exhaustion/i },
+  { t:1, r:/вносител|риск|аномал|флаг|fraud|split|concurrent|3[ABC]/i },
+  { t:0, r:/квота|utilisa|utiliza|остатък|баланс|блокир|quota|initial.?volume/i },
+];
+
+function routeResponse(text) {
+  // 1. Structured hint from tool JSON output
+  const m = text.match(/"dashboard_hint"\s*:\s*"([^"]+)"/);
+  if (m) {
+    const idx = HINT_TO_IDX[m[1].trim()];
+    if (idx !== undefined) return idx;
+  }
+  // 2. Keyword scan
+  for (const { t, r } of KW) if (r.test(text)) return t;
+  return null;
+}
+
+function onAgentMessage(text) {
+  if (!text) return;
+  const idx = routeResponse(text);
+  if (idx !== null) {
+    showHint(idx);
+    switchTab(idx, true);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   WXO WEBCHAT — inline mount in #wxo-mount
+   showLauncher: false  →  no floating bubble, widget fills the panel
+   rootElementID: 'wxo-mount'  →  renders inside our left panel
+   ════════════════════════════════════════════════════════════════════════ */
+function initWXO() {
+  window.wxOConfiguration = CFG.wxo;
+
+  const s = document.createElement('script');
+  s.src = `${CFG.wxo.hostURL}/wxochat/wxoLoader.js?embed=true`;
+  s.onload = () => {
+    if (typeof wxoLoader !== 'undefined') {
+      wxoLoader.init();
+      console.log('✅ WXO webchat mounted in #wxo-mount');
+    }
+  };
+  s.onerror = () => console.warn('⚠️ WXO loader script failed to load');
+  document.head.appendChild(s);
+
+  /* Listen for agent reply postMessages from WXO widget */
+  window.addEventListener('message', evt => {
+    try {
+      const d = typeof evt.data === 'string' ? JSON.parse(evt.data) : evt.data;
+      if (!d) return;
+      const isAgentMsg = ['agentMessage','chat_message','wxo_message','message',
+                          'agent_response','response'].includes(d.type);
+      if (isAgentMsg) {
+        const txt = d.text || d.message || d.content || d.body || d.response || '';
+        if (txt) onAgentMessage(txt);
+      }
+    } catch (_) { /* ignore non-JSON messages */ }
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   DRAG RESIZE (left ↔ right panels)
+   ════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const rz = document.getElementById('rz');
+  const cp = document.getElementById('cpanel');
+  let drag = false, startX = 0, startW = 0;
+  rz.addEventListener('mousedown', e => {
+    drag=true; startX=e.clientX; startW=cp.offsetWidth;
+    rz.classList.add('d');
+    document.body.style.cssText='cursor:col-resize;user-select:none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!drag) return;
+    cp.style.width = Math.max(280, Math.min(600, startW+(e.clientX-startX)))+'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!drag) return; drag=false;
+    rz.classList.remove('d'); document.body.style.cssText='';
+  });
+})();
+
+/* ════════════════════════════════════════════════════════════════════════
+   BOOT
+   ════════════════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  initWXO();      // start WXO chat widget
+  initCognos();   // load Cognos dashboard + SDK
+});
+</script>
+</body>
+</html>
